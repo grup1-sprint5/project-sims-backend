@@ -1,0 +1,129 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Tenant;
+use App\Http\Requests\Tenant\StoreTenantRequest;
+use App\Http\Requests\Tenant\UpdateTenantRequest;
+use App\Http\Resources\TenantResource;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class TenantController extends Controller
+{
+    /**
+     * Lista paginada de tenants con filtros y búsqueda.
+     *
+     * Parámetros de query:
+     * - search: busca por name, slug, email o tax_id
+     * - active: filtro por estado activo (true/false)
+     * - sort: campo para ordenar (name, slug, created_at) — default: created_at
+     * - dir: dirección de orden (asc, desc) — default: desc
+     * - per_page: resultados por página — default: 15
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Tenant::class);
+
+        $query = Tenant::withCount(['users', 'vehicles']);
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'ILIKE', "%{$search}%")
+                  ->orWhere('slug', 'ILIKE', "%{$search}%")
+                  ->orWhere('email', 'ILIKE', "%{$search}%")
+                  ->orWhere('tax_id', 'ILIKE', "%{$search}%");
+            });
+        }
+
+        if ($request->has('active')) {
+            $query->where('active', filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN));
+        }
+
+        $sortField = in_array($request->input('sort'), ['name', 'slug', 'created_at']) 
+            ? $request->input('sort') 
+            : 'created_at';
+        $sortDir = in_array($request->input('dir'), ['asc', 'desc']) 
+            ? $request->input('dir') 
+            : 'desc';
+
+        $tenants = $query->orderBy($sortField, $sortDir)
+                         ->paginate($request->input('per_page', 15));
+
+        return TenantResource::collection($tenants)->response();
+    }
+
+    /**
+     * Crear un nuevo tenant.
+     */
+    public function store(StoreTenantRequest $request): JsonResponse
+    {
+        $this->authorize('create', Tenant::class);
+
+        $tenant = Tenant::create($request->validated());
+
+        return response()->json([
+            'message' => 'Tenant creado correctamente',
+            'data'    => new TenantResource($tenant),
+        ], 201);
+    }
+
+    /**
+     * Mostrar un tenant específico.
+     */
+    public function show(Tenant $tenant): JsonResponse
+    {
+        $this->authorize('view', $tenant);
+
+        $tenant->loadCount(['users', 'vehicles']);
+
+        return response()->json([
+            'data' => new TenantResource($tenant),
+        ]);
+    }
+
+    /**
+     * Actualizar un tenant.
+     */
+    public function update(UpdateTenantRequest $request, Tenant $tenant): JsonResponse
+    {
+        $this->authorize('update', $tenant);
+
+        $tenant->update($request->validated());
+
+        return response()->json([
+            'message' => 'Tenant actualizado correctamente',
+            'data'    => new TenantResource($tenant),
+        ]);
+    }
+
+    /**
+     * Eliminar un tenant (soft delete).
+     */
+    public function destroy(Tenant $tenant): JsonResponse
+    {
+        $this->authorize('delete', $tenant);
+
+        $tenant->delete();
+
+        return response()->json([
+            'message' => 'Tenant eliminado correctamente',
+        ]);
+    }
+
+    /**
+     * Activar/desactivar un tenant rápidamente.
+     */
+    public function toggleActive(Tenant $tenant): JsonResponse
+    {
+        $this->authorize('update', $tenant);
+
+        $tenant->update(['active' => !$tenant->active]);
+
+        return response()->json([
+            'message' => $tenant->active ? 'Tenant activado' : 'Tenant desactivado',
+            'data'    => new TenantResource($tenant),
+        ]);
+    }
+}

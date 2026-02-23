@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             PermissionsSeeder::class,
             RolesSeeder::class,
+            TenantsSeeder::class,
         ]);
 
         $password = Hash::make('password'); // Contraseña común para test
