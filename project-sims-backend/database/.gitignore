@@ -1,0 +1,10 @@
+*.sqlite
+*.sqlite3
+database.sqlite
+.env
+
+# Ignore local DB backups
+*.sql
+*.sql.gz
+
+
