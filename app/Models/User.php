@@ -41,7 +41,8 @@ class User extends Authenticatable
         'username',
         'email',
         'password',
-        'active'
+        'active',
+        'tenant_id',
     ];
 
     /**
@@ -88,5 +89,13 @@ class User extends Authenticatable
     public function tickets()
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    /**
+     * Tenant this user belongs to.
+     */
+    public function tenant()
+    {
+        return $this->belongsTo(Tenant::class);
     }
 }

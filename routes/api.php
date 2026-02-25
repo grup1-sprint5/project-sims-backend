@@ -12,6 +12,7 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\TicketMessageController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\AdminReservationController;
+use App\Http\Controllers\TenantController;
 
 
 Route::post('/login', [AuthController::class, 'login'])->name('login');
@@ -38,6 +39,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('tickets', TicketController::class);
     Route::post('tickets/{ticket}/messages', [TicketMessageController::class, 'store']);
     Route::delete('messages/{message}', [TicketMessageController::class, 'destroy']);
+
+    // Tenants endpoints
+    Route::apiResource('tenants', TenantController::class);
+    Route::patch('tenants/{tenant}/toggle-active', [TenantController::class, 'toggleActive']);
 
     // Reservations endpoints (User operations)
     Route::get('reservations', [ReservationController::class, 'index']);

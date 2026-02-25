@@ -43,6 +43,11 @@ class PermissionsSeeder extends Seeder
             'reservations.view',
             'reservations.manage', // Create, Activate, Cancel, Finish
             'reservations.delete',
+
+            // Tenants Module
+            'tenants.view',
+            'tenants.manage',   // Create, Edit
+            'tenants.delete',
         ];
 
         // Create or retrieve permissions

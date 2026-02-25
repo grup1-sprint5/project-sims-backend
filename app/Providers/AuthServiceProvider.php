@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Ticket;
 use App\Models\Vehicle;
 use App\Models\Reservation;
+use App\Models\Tenant;
 use Spatie\Permission\Models\Role;
 
 // Policies
@@ -18,6 +19,7 @@ use App\Policies\TicketPolicy;
 use App\Policies\VehiclePolicy;
 use App\Policies\ReservationPolicy;
 use App\Policies\RolePolicy;
+use App\Policies\TenantPolicy;
 
 class AuthServiceProvider extends ServiceProvider
 {
@@ -32,6 +34,7 @@ class AuthServiceProvider extends ServiceProvider
         Vehicle::class => VehiclePolicy::class,
         Reservation::class => ReservationPolicy::class,
         Role::class => RolePolicy::class,
+        Tenant::class => TenantPolicy::class,
     ];
 
     /**
