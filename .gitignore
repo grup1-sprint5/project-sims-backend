@@ -38,7 +38,7 @@ yarn-error.log*
 # Docker
 .docker/
 docker-compose.override.yml
-
+docker-compose.yml
 # Others
 .env.backup
 /.sass-cache
