@@ -71,6 +71,8 @@ class RoleController extends Controller
      */
     public function update(UpdateRoleRequest $request, Role $role)
     {
+        $this->authorize('update', $role);
+
         $data = $request->validated();
 
         $role->update([

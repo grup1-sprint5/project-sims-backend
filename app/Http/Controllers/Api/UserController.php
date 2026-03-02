@@ -59,8 +59,6 @@ class UserController extends Controller
      */
     public function store(StoreUserRequest $request)
     {
-        $this->authorize('create', User::class);
-
         $data = $request->validated();
 
         $roleId = $data['role_id'] ?? null;
