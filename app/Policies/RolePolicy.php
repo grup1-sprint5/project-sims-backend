@@ -8,59 +8,58 @@ use Spatie\Permission\Models\Role;
 class RolePolicy
 {
     /**
-     * Protected system roles that cannot be modified.
+     * System roles that cannot be modified or deleted.
      */
     private const PROTECTED_ROLES = ['Admin', 'Client', 'Maintenance'];
 
     /**
-     * Determine if the user can view any roles.
+     * Safely checks a permission, returning false instead of throwing
+     * PermissionDoesNotExist if the permission is not yet seeded.
      */
+    private function hasPerm(User $user, string ...$perms): bool
+    {
+        try {
+            return $user->hasAnyPermission($perms);
+        } catch (\Exception) {
+            return false;
+        }
+    }
+
+    /** List roles — requires roles.view or roles.manage. */
     public function viewAny(User $user): bool
     {
-        return $user->hasPermissionTo('roles.view');
+        return $this->hasPerm($user, 'roles.view', 'roles.manage');
     }
 
-    /**
-     * Determine if the user can view a specific role.
-     */
+    /** View a single role — requires roles.view or roles.manage. */
     public function view(User $user, Role $role): bool
     {
-        return $user->hasPermissionTo('roles.view');
+        return $this->hasPerm($user, 'roles.view', 'roles.manage');
     }
 
-    /**
-     * Determine if the user can create a new role.
-     */
+    /** Create role — requires roles.manage. */
     public function create(User $user): bool
     {
-        return $user->hasPermissionTo('roles.manage');
+        return $this->hasPerm($user, 'roles.manage');
     }
 
-    /**
-     * Determine if the user can update a role.
-     * Protected system roles cannot be edited.
-     */
+    /** Update role — requires roles.manage; system roles are protected. */
     public function update(User $user, Role $role): bool
     {
-        // Prevent editing of system roles
         if (in_array($role->name, self::PROTECTED_ROLES)) {
             return false;
         }
 
-        return $user->hasPermissionTo('roles.manage');
+        return $this->hasPerm($user, 'roles.manage');
     }
 
-    /**
-     * Determine if the user can delete a role.
-     * Protected system roles cannot be deleted.
-     */
+    /** Delete role — requires roles.delete; system roles are protected. */
     public function delete(User $user, Role $role): bool
     {
-        // Prevent deletion of system roles
         if (in_array($role->name, self::PROTECTED_ROLES)) {
             return false;
         }
 
-        return $user->hasPermissionTo('roles.delete');
+        return $this->hasPerm($user, 'roles.delete');
     }
 }

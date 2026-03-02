@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreRoleRequest;
+use App\Http\Requests\UpdateRoleRequest;
+use App\Http\Resources\RoleResource;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
-use Illuminate\Validation\Rule;
 
 class RoleController extends Controller
 {
     /**
      * List all roles with their permissions.
+     * Supports ?search= filter and pagination.
      * Requires 'roles.view' permission.
      */
     public function index(Request $request)
@@ -18,45 +21,36 @@ class RoleController extends Controller
         $this->authorize('viewAny', Role::class);
 
         $query = Role::with('permissions');
-        
-        if ($request->has('search')) {
-            $search = $request->input('search');
-            $query->whereRaw('LOWER(name) LIKE ?', ["%".strtolower($search)."%"]);
+
+        if ($search = $request->input('search')) {
+            $query->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%']);
         }
-        
-        $roles = $query->paginate(10);
-        
-        return response()->json($roles);
+
+        $perPage = (int) $request->input('per_page', 15);
+
+        return RoleResource::collection($query->paginate(min($perPage, 100)));
     }
 
     /**
-     * Create a new role.
+     * Create a new role with optional permissions.
      * Requires 'roles.manage' permission.
-     * Cannot create system roles (Admin, Client, Maintenance).
      */
-    public function store(Request $request)
+    public function store(StoreRoleRequest $request)
     {
         $this->authorize('create', Role::class);
 
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:roles,name'],
-            'description' => ['sometimes', 'string', 'max:255'],
-            'guard_name' => ['sometimes', 'string', 'max:255'],
-            'permissions' => ['sometimes', 'array'],
-            'permissions.*' => ['integer', 'exists:permissions,id'],
-        ]);
+        $data = $request->validated();
 
         $role = Role::create([
-            'name' => $data['name'],
-            'description' => $data['description'] ?? '',
+            'name'       => $data['name'],
             'guard_name' => $data['guard_name'] ?? 'web',
         ]);
 
-        if (isset($data['permissions'])) {
+        if (!empty($data['permissions'])) {
             $role->syncPermissions($data['permissions']);
         }
 
-        return response()->json($role->load('permissions'), 201);
+        return (new RoleResource($role->load('permissions')))->response()->setStatusCode(201);
     }
 
     /**
@@ -67,67 +61,43 @@ class RoleController extends Controller
     {
         $this->authorize('view', $role);
 
-        return response()->json($role->load('permissions'));
+        return new RoleResource($role->load('permissions'));
     }
 
     /**
-     * Update a role.
+     * Update a role's name and/or permissions.
      * Requires 'roles.manage' permission.
-     * Cannot update system roles (Admin, Client, Maintenance).
+     * System roles (Admin, Client, Maintenance) cannot be modified.
      */
-    public function update(Request $request, Role $role)
+    public function update(UpdateRoleRequest $request, Role $role)
     {
-        // Prevent editing Admin role
-        if (strtolower($role->name) === 'admin') {
-            return response()->json([
-                'message' => 'Cannot modify the Admin role',
-            ], 403);
-        }
+        $this->authorize('update', $role);
 
-        $data = $request->validate([
-            'name' => [
-                'sometimes',
-                'string',
-                'max:255',
-                Rule::unique('roles', 'name')->ignore($role->id),
-            ],
-            'description' => ['sometimes', 'string', 'max:255'],
-            'guard_name' => ['sometimes', 'string', 'max:255'],
-            'permissions' => ['sometimes', 'array'],
-            'permissions.*' => ['integer', 'exists:permissions,id'],
-        ]);
+        $data = $request->validated();
 
         $role->update([
-            'name' => $data['name'] ?? $role->name,
-            'description' => $data['description'] ?? $role->description,
+            'name'       => $data['name'] ?? $role->name,
             'guard_name' => $data['guard_name'] ?? $role->guard_name,
         ]);
 
-        if (isset($data['permissions'])) {
+        if (array_key_exists('permissions', $data)) {
             $role->syncPermissions($data['permissions']);
         }
 
-        return response()->json($role->load('permissions'));
+        return new RoleResource($role->load('permissions'));
     }
 
     /**
      * Delete a role.
      * Requires 'roles.delete' permission.
-     * Cannot delete system roles (Admin, Client, Maintenance).
+     * System roles (Admin, Client, Maintenance) cannot be deleted.
      */
     public function destroy(Role $role)
     {
-        // Prevent deleting Admin role
-        if (strtolower($role->name) === 'admin') {
-            return response()->json([
-                'message' => 'Cannot delete the Admin role',
-            ], 403);
-        }
+        $this->authorize('delete', $role);
 
         $role->delete();
 
-        return response()->json([
-            'message' => 'Role deleted successfully',
-        ]);
+        return response()->json(['message' => 'Role deleted successfully']);
     }
 }
