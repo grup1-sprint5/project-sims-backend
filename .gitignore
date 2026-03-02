@@ -1,0 +1,69 @@
+*.log
+.DS_Store
+.env
+
+# Laravel
+/vendor/
+/node_modules/
+
+# Laravel storage and build
+/public/storage
+/public/hot
+/public/build
+/storage/*.key
+
+# IDE / OS files
+/.vagrant
+.idea/
+.DS_Store
+
+# Composer
+/composer.lock
+
+# Logs and caches
+/storage/logs/
+/.phpunit.result.cache
+/.phpunit.cache
+
+# NPM/Yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+/database/*.sqlite
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Others
+.env.backup
+/.sass-cache
+.env.production
+.phpactor.json
+/.fleet
+/audit_*.php
+/test_*.php
+/test_*.ps1
+/check_*.php
+/.idea
+/.nova
+/.zed
+/auth.json
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/vendor
+Homestead.json
+Homestead.yaml
+Thumbs.db
+postman_collection.json
+postman_collection_tickets.json
+tmp_insert_test_user.php
+tmp_insert_test_user_pg.sql
+librerias-mapa.txt
