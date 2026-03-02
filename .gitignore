@@ -1,26 +1,15 @@
-# Dependencies
-/node_modules
-/vendor
-
-# Environment files
-.env
-.env.backup
-.env.production
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
+*.log
 .DS_Store
-Thumbs.db
+.env
 
 # Laravel
-/bootstrap/cache/*
-!/bootstrap/cache/.gitignore
+/vendor/
+/node_modules/
+
+# Laravel storage and build
+/public/storage
+/public/hot
+/public/build
 /storage/*.key
 /storage/app/*
 !/storage/app/.gitignore
@@ -35,20 +24,56 @@ Thumbs.db
 !/storage/framework/views/.gitignore
 /storage/logs/*
 !/storage/logs/.gitignore
-/public/hot
-/public/storage
+
+# IDE / OS files
+/.vagrant
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
 
 # Composer
-composer.lock
+/composer.lock
 
-# NPM
+# Logs and caches
+/.phpunit.result.cache
+/.phpunit.cache
+
+# NPM/Yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 package-lock.json
 
-# Testing
-.phpunit.result.cache
-.phpunit.cache
+# SQLite databases
+*.sqlite
+*.sqlite3
+/database/*.sqlite
 
-# Build files
-/public/build
-/public/css
-/public/js
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Others
+.env.backup
+/.sass-cache
+.env.production
+.phpactor.json
+/.fleet
+/audit_*.php
+/test_*.php
+/test_*.ps1
+/check_*.php
+/.nova
+/.zed
+/auth.json
+/storage/pail
+Homestead.json
+Homestead.yaml
+postman_collection.json
+postman_collection_tickets.json
+tmp_insert_test_user.php
+tmp_insert_test_user_pg.sql
+librerias-mapa.txt
