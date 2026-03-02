@@ -11,7 +11,10 @@ class UserCrudTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** Crea permisos i un admin amb tots els permisos d'usuaris. */
+    /**
+     * Crea els permisos d'usuaris i retorna un admin amb tots ells assignats.
+     * Usa Spatie\Permission per assignar permisos directament a l'usuari.
+     */
     private function createAdmin(): User
     {
         foreach (['users.manage', 'users.delete', 'users.restore', 'users.view'] as $perm) {
