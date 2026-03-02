@@ -12,7 +12,10 @@ class RoleCrudTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** Crea permisos i un admin amb tots els permisos de rols. */
+    /**
+     * Crea els permisos de rols i retorna un usuari admin amb tots els permisos.
+     * Usa Spatie\Permission per assignar permisos directament a l'usuari.
+     */
     private function createAdmin(): User
     {
         foreach (['roles.manage', 'roles.delete', 'roles.view'] as $perm) {
