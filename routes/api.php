@@ -24,6 +24,7 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Users endpoints
     Route::post('/users', [UserController::class, 'store']);
+    Route::post('/users/{user}/restore', [UserController::class, 'restore']);
     Route::apiResource('users', UserController::class)->except(['store']);
     
     // Roles endpoints
