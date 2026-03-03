@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | IA Chat (OpenWebUI compatible)
+    |--------------------------------------------------------------------------
+    */
+    'ia' => [
+        'url'   => env('IA_API_URL', 'http://api-ia.daw2.iesmontsia.org:3000/api'),
+        'key'   => env('IA_API_KEY'),
+        'model' => env('IA_MODEL', 'llama3.2:3b'),
+    ],
+
 ];
