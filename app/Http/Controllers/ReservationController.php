@@ -18,11 +18,11 @@ class ReservationController extends Controller
 
         $user = Auth::user();
 
-        // Admin o Manager puede ver todas
+        // Admin/Manager can see reservations (scoped by tenant via global scope)
         if ($user->hasPermissionTo('reservations.manage')) {
-            return Reservation::with(['user', 'vehicle', 'trip'])
-                ->orderBy('scheduled_start', 'desc')
-                ->get();
+            $query = Reservation::with(['user', 'vehicle', 'trip', 'tenant'])
+                ->orderBy('scheduled_start', 'desc');
+            return $query->get();
         }
 
         return Reservation::where('user_id', $user->id)

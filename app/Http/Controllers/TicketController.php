@@ -13,12 +13,13 @@ class TicketController extends Controller
     {
         $user = Auth::user();
 
-        // Admin o Soporte ve todos
+        // Admin/Support sees tickets (scoped by tenant via global scope)
         if ($user->hasPermissionTo('tickets.manage')) {
-            return Ticket::with(['user', 'messages'])->orderBy('created_at', 'desc')->get();
+            $query = Ticket::with(['user', 'messages', 'tenant'])->orderBy('created_at', 'desc');
+            return $query->get();
         }
 
-        // Usuario normal ve los suyos
+        // Regular user sees only their own
         if ($user->hasPermissionTo('tickets.view')) {
             return Ticket::where('user_id', $user->id)
                 ->with('messages')

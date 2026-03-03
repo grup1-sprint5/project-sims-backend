@@ -18,10 +18,13 @@ class VehiclePolicy
 
     /**
      * Determine if the user can view a specific vehicle.
+     * TenantAdmin can only view vehicles from their own tenant.
      */
     public function view(User $user, Vehicle $vehicle): bool
     {
-        return $user->hasPermissionTo('vehicles.view');
+        if (!$user->hasPermissionTo('vehicles.view')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $vehicle->tenant_id === null || $vehicle->tenant_id === $user->tenant_id;
     }
 
     /**
@@ -35,19 +38,23 @@ class VehiclePolicy
 
     /**
      * Determine if the user can update a vehicle.
-     * Only users with 'vehicles.manage' permission (Admin, Maintenance).
+     * TenantAdmin can only update vehicles from their own tenant.
      */
     public function update(User $user, Vehicle $vehicle): bool
     {
-        return $user->hasPermissionTo('vehicles.manage');
+        if (!$user->hasPermissionTo('vehicles.manage')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $vehicle->tenant_id === null || $vehicle->tenant_id === $user->tenant_id;
     }
 
     /**
      * Determine if the user can delete a vehicle.
-     * Only admins with 'vehicles.delete' permission can delete.
+     * TenantAdmin can only delete vehicles from their own tenant.
      */
     public function delete(User $user, Vehicle $vehicle): bool
     {
-        return $user->hasPermissionTo('vehicles.delete');
+        if (!$user->hasPermissionTo('vehicles.delete')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $vehicle->tenant_id === null || $vehicle->tenant_id === $user->tenant_id;
     }
 }

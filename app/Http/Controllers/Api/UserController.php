@@ -19,7 +19,9 @@ class UserController extends Controller
     {
         $this->authorize('viewAny', User::class);
 
-        return response()->json(User::with('roles')->get());
+        $query = User::with(['roles', 'tenant']);
+
+        return response()->json($query->get());
     }
 
     /**
@@ -30,7 +32,7 @@ class UserController extends Controller
     {
         $this->authorize('view', $user);
 
-        return response()->json($user->load('roles'));
+        return response()->json($user->load(['roles', 'tenant']));
     }
 
     /**
@@ -54,6 +56,7 @@ class UserController extends Controller
         unset($data['role_id']);
 
         $data['password'] = Hash::make($data['password']);
+
         $user = User::create($data);
         
         if ($roleId) {

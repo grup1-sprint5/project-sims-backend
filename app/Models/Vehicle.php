@@ -6,12 +6,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Traits\BelongsToTenant;
 
 class Vehicle extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, BelongsToTenant;
 
     protected $fillable = [
+        'tenant_id',
         'license_plate',
         'brand',
         'model',
@@ -24,6 +26,11 @@ class Vehicle extends Model
         'active' => 'boolean',
         'price_per_minute' => 'float',
     ];
+
+    public function tenant()
+    {
+        return $this->belongsTo(Tenant::class);
+    }
 
     public function reservations(): HasMany
     {

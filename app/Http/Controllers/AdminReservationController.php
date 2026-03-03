@@ -16,12 +16,11 @@ class AdminReservationController extends Controller
      */
     public function index(Request $request)
     {
-        // Authorize the admin action
         $this->authorize('viewAny', Reservation::class);
 
-        $query = Reservation::with(['user', 'vehicle', 'trip']);
+        $user = auth()->user();
+        $query = Reservation::with(['user', 'vehicle', 'trip', 'tenant']);
 
-        // Filter by status if provided
         if ($request->has('status')) {
             $query->where('status', $request->status);
         }

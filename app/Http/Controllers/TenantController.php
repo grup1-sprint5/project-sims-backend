@@ -25,6 +25,16 @@ class TenantController extends Controller
     {
         $this->authorize('viewAny', Tenant::class);
 
+        $user = auth()->user();
+
+        // TenantAdmin can only see their own tenant
+        if (!$user->isSuperAdmin() && $user->tenant_id) {
+            $tenant = Tenant::withCount(['users', 'vehicles'])->find($user->tenant_id);
+            return response()->json([
+                'data' => $tenant ? [new TenantResource($tenant)] : [],
+            ]);
+        }
+
         $query = Tenant::withCount(['users', 'vehicles']);
 
         if ($request->filled('search')) {

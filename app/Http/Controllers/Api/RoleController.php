@@ -12,20 +12,31 @@ class RoleController extends Controller
     /**
      * List all roles with their permissions.
      * Requires 'roles.view' permission.
+     * SuperAdmin sees all roles. TenantAdmin sees system roles (except SuperAdmin) + their tenant's custom roles.
      */
     public function index(Request $request)
     {
         $this->authorize('viewAny', Role::class);
 
+        $user = auth()->user();
         $query = Role::with('permissions');
-        
+
+        if (!$user->isSuperAdmin()) {
+            // Hide SuperAdmin role and show only: system roles (tenant_id=null) + own tenant's roles
+            $query->where('name', '!=', 'SuperAdmin')
+                  ->where(function ($q) use ($user) {
+                      $q->whereNull('tenant_id')
+                        ->orWhere('tenant_id', $user->tenant_id);
+                  });
+        }
+
         if ($request->has('search')) {
             $search = $request->input('search');
             $query->whereRaw('LOWER(name) LIKE ?', ["%".strtolower($search)."%"]);
         }
-        
+
         $roles = $query->paginate(10);
-        
+
         return response()->json($roles);
     }
 
@@ -46,10 +57,13 @@ class RoleController extends Controller
             'permissions.*' => ['integer', 'exists:permissions,id'],
         ]);
 
+        $user = auth()->user();
+
         $role = Role::create([
             'name' => $data['name'],
             'description' => $data['description'] ?? '',
             'guard_name' => $data['guard_name'] ?? 'web',
+            'tenant_id' => $user->isSuperAdmin() ? null : $user->tenant_id,
         ]);
 
         if (isset($data['permissions'])) {
@@ -62,6 +76,7 @@ class RoleController extends Controller
     /**
      * Show a specific role with its permissions.
      * Requires 'roles.view' permission.
+     * Non-SuperAdmin users cannot view the SuperAdmin role.
      */
     public function show(Role $role)
     {
@@ -73,14 +88,16 @@ class RoleController extends Controller
     /**
      * Update a role.
      * Requires 'roles.manage' permission.
-     * Cannot update system roles (Admin, Client, Maintenance).
+     * Cannot update system roles (SuperAdmin, TenantAdmin, Client, Maintenance).
      */
     public function update(Request $request, Role $role)
     {
-        // Prevent editing Admin role
-        if (strtolower($role->name) === 'admin') {
+        $this->authorize('update', $role);
+
+        // Prevent editing SuperAdmin role
+        if (strtolower($role->name) === 'superadmin') {
             return response()->json([
-                'message' => 'Cannot modify the Admin role',
+                'message' => 'Cannot modify the SuperAdmin role',
             ], 403);
         }
 
@@ -113,14 +130,16 @@ class RoleController extends Controller
     /**
      * Delete a role.
      * Requires 'roles.delete' permission.
-     * Cannot delete system roles (Admin, Client, Maintenance).
+     * Cannot delete system roles (SuperAdmin, TenantAdmin, Client, Maintenance).
      */
     public function destroy(Role $role)
     {
-        // Prevent deleting Admin role
-        if (strtolower($role->name) === 'admin') {
+        $this->authorize('delete', $role);
+
+        // Prevent deleting SuperAdmin role
+        if (strtolower($role->name) === 'superadmin') {
             return response()->json([
-                'message' => 'Cannot delete the Admin role',
+                'message' => 'Cannot delete the SuperAdmin role',
             ], 403);
         }
 

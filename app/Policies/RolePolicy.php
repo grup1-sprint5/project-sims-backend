@@ -10,7 +10,7 @@ class RolePolicy
     /**
      * Protected system roles that cannot be modified.
      */
-    private const PROTECTED_ROLES = ['Admin', 'Client', 'Maintenance'];
+    private const PROTECTED_ROLES = ['SuperAdmin', 'TenantAdmin', 'Client', 'Maintenance'];
 
     /**
      * Determine if the user can view any roles.
@@ -22,10 +22,25 @@ class RolePolicy
 
     /**
      * Determine if the user can view a specific role.
+     * Non-SuperAdmin users cannot view the SuperAdmin role.
+     * TenantAdmin can only view system roles or their own tenant's roles.
      */
     public function view(User $user, Role $role): bool
     {
-        return $user->hasPermissionTo('roles.view');
+        if (!$user->hasPermissionTo('roles.view')) {
+            return false;
+        }
+
+        if (!$user->isSuperAdmin()) {
+            if (strtolower($role->name) === 'superadmin') {
+                return false;
+            }
+            if ($role->tenant_id !== null && $role->tenant_id !== $user->tenant_id) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -47,7 +62,16 @@ class RolePolicy
             return false;
         }
 
-        return $user->hasPermissionTo('roles.manage');
+        if (!$user->hasPermissionTo('roles.manage')) {
+            return false;
+        }
+
+        // TenantAdmin can only update roles belonging to their tenant
+        if (!$user->isSuperAdmin() && $role->tenant_id !== $user->tenant_id) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -61,6 +85,15 @@ class RolePolicy
             return false;
         }
 
-        return $user->hasPermissionTo('roles.delete');
+        if (!$user->hasPermissionTo('roles.delete')) {
+            return false;
+        }
+
+        // TenantAdmin can only delete roles belonging to their tenant
+        if (!$user->isSuperAdmin() && $role->tenant_id !== $user->tenant_id) {
+            return false;
+        }
+
+        return true;
     }
 }

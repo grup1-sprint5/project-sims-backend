@@ -19,16 +19,14 @@ class UserPolicy
     /**
      * Determine if the user can view a specific user.
      * Admin can view any user, users can view their own profile.
+     * TenantAdmin can only view users from their own tenant.
      */
     public function view(User $user, User $targetUser): bool
     {
-        // Admin can view anyone
-        if ($user->hasPermissionTo('users.view')) {
-            return true;
-        }
-
-        // Users can view their own profile
-        return $user->id === $targetUser->id;
+        if ($user->id === $targetUser->id) { return true; }
+        if (!$user->hasPermissionTo('users.view')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
     }
 
     /**
@@ -43,29 +41,26 @@ class UserPolicy
     /**
      * Determine if the user can update a user.
      * Admin can update any user, users can update their own profile.
+     * TenantAdmin can only update users from their own tenant.
      */
     public function update(User $user, User $targetUser): bool
     {
-        // Admin can update anyone
-        if ($user->hasPermissionTo('users.manage')) {
-            return true;
-        }
-
-        // Users can update their own profile
-        return $user->id === $targetUser->id;
+        if ($user->id === $targetUser->id) { return true; }
+        if (!$user->hasPermissionTo('users.manage')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
     }
 
     /**
      * Determine if the user can delete a user.
      * Only Admins can delete users, and they cannot delete themselves.
+     * TenantAdmin can only delete users from their own tenant.
      */
     public function delete(User $user, User $targetUser): bool
     {
-        // Prevent self-deletion
-        if ($user->id === $targetUser->id) {
-            return false;
-        }
-
-        return $user->hasPermissionTo('users.delete');
+        if ($user->id === $targetUser->id) { return false; }
+        if (!$user->hasPermissionTo('users.delete')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
     }
 }

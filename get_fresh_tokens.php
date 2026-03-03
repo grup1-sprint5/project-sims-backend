@@ -9,7 +9,7 @@ $kernel->bootstrap();
 use App\Models\User;
 
 $users = [
-    'admin' => User::role('admin')->first(),
+    'superadmin' => User::role('SuperAdmin')->first(),
     'client' => User::role('client')->first(),
     'maintenance' => User::role('maintenance')->first(),
 ];

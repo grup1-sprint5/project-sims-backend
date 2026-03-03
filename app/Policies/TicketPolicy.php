@@ -18,17 +18,14 @@ class TicketPolicy
 
     /**
      * Determine if the user can view a specific ticket.
-     * Admins can view any ticket, users can only view their own.
+     * Admins can view any ticket, TenantAdmin only their tenant's, users their own.
      */
     public function view(User $user, Ticket $ticket): bool
     {
-        // Admin can view any ticket
-        if ($user->hasPermissionTo('tickets.delete')) {
-            return true;
-        }
-
-        // Users can only view their own tickets
-        return $user->hasPermissionTo('tickets.view') && $user->id === $ticket->user_id;
+        if ($user->id === $ticket->user_id) { return true; }
+        if (!$user->hasPermissionTo('tickets.view')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $ticket->tenant_id === null || $ticket->tenant_id === $user->tenant_id;
     }
 
     /**
@@ -41,25 +38,24 @@ class TicketPolicy
 
     /**
      * Determine if the user can update (respond to) a ticket.
-     * Admins can update any ticket, users can only update their own.
+     * Admins can update any ticket, TenantAdmin only their tenant's, users their own.
      */
     public function update(User $user, Ticket $ticket): bool
     {
-        // Admin can update any ticket
-        if ($user->hasPermissionTo('tickets.delete')) {
-            return true;
-        }
-
-        // Users can update their own tickets if they have manage permission
-        return $user->hasPermissionTo('tickets.manage') && $user->id === $ticket->user_id;
+        if ($user->id === $ticket->user_id) { return true; }
+        if (!$user->hasPermissionTo('tickets.manage')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $ticket->tenant_id === null || $ticket->tenant_id === $user->tenant_id;
     }
 
     /**
      * Determine if the user can delete a ticket.
-     * Only admins with 'tickets.delete' permission can delete.
+     * TenantAdmin can only delete tickets from their own tenant.
      */
     public function delete(User $user, Ticket $ticket): bool
     {
-        return $user->hasPermissionTo('tickets.delete');
+        if (!$user->hasPermissionTo('tickets.delete')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $ticket->tenant_id === null || $ticket->tenant_id === $user->tenant_id;
     }
 }
