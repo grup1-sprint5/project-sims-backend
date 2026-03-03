@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PermissionController;
+use App\Http\Controllers\Api\ChatController;
 
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\TicketController;
@@ -62,4 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('reservations/{id}', [AdminReservationController::class, 'destroy'])->name('reservations.destroy');
         Route::post('reservations/{id}/force-finish', [AdminReservationController::class, 'forceFinish'])->name('reservations.forceFinish');
     });
+
+    // AI Chatbot endpoint
+    Route::post('/chat', [ChatController::class, 'send']);
 });
