@@ -15,9 +15,12 @@ class Vehicle extends Model
         'license_plate',
         'brand',
         'model',
+        'status',
+        'type',
         'active',
         'price_per_minute',
         'image_url',
+        'tenant_id',
     ];
 
     protected $casts = [
