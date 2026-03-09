@@ -37,42 +37,75 @@ class ReservationController extends Controller
 
         $validated = $request->validate([
             'vehicle_id' => 'required|exists:vehicles,id',
-            'scheduled_start' => 'required|date|after_or_equal:now',
+            'scheduled_start' => [
+                'required',
+                'date',
+                'after_or_equal:' . now()->subMinutes(5)->toDateTimeString(),
+            ],
+            'scheduled_end' => 'required|date|after:scheduled_start',
         ]);
 
         return DB::transaction(function () use ($validated, $request) {
             $vehicle = Vehicle::where('id', $validated['vehicle_id'])->lockForUpdate()->firstOrFail();
+            $user = $request->user();
+            
+            // Verificar tenant
+            if ($user->tenant_id !== null && $vehicle->tenant_id !== $user->tenant_id) {
+                return response()->json([
+                    'message' => 'No pots reservar vehicles d\'altres tenants'
+                ], 403);
+            }
             
             $requestedStart = Carbon::parse($validated['scheduled_start']);
+            $requestedEnd = Carbon::parse($validated['scheduled_end']);
 
-            $isBusy = Reservation::where('vehicle_id', $vehicle->id)
-                ->where(function ($query) {
-                    $query->where('status', 'active')
-                          ->orWhere(function ($q) {
-                              $q->where('status', 'pending')
-                                ->where('activation_deadline', '>', now());
+            // Verificar disponibilitat
+            $hasConflict = Reservation::where('vehicle_id', $vehicle->id)
+                ->whereIn('status', ['pending', 'active'])
+                ->where(function ($query) use ($requestedStart, $requestedEnd) {
+                    $query->where(function ($q) use ($requestedStart, $requestedEnd) {
+                        $q->whereNotNull('scheduled_end')
+                          ->where(function ($sq) use ($requestedStart, $requestedEnd) {
+                              $sq->whereBetween('scheduled_start', [$requestedStart, $requestedEnd])
+                                 ->orWhereBetween('scheduled_end', [$requestedStart, $requestedEnd])
+                                 ->orWhere(function ($ssq) use ($requestedStart, $requestedEnd) {
+                                     $ssq->where('scheduled_start', '<=', $requestedStart)
+                                        ->where('scheduled_end', '>=', $requestedEnd);
+                                 });
                           });
+                    })->orWhere(function ($q) use ($requestedStart) {
+                        $q->whereNull('scheduled_end')
+                          ->where('scheduled_start', '>=', $requestedStart->copy()->subHours(2))
+                          ->where('scheduled_start', '<=', $requestedStart->copy()->addHours(2));
+                    });
                 })
                 ->exists();
 
-            if ($isBusy) {
+            if ($hasConflict) {
                 return response()->json([
-                    'message' => 'Vehicle unavailable or currently in use.'
+                    'message' => 'El vehicle ja està reservat en aquest horari'
                 ], 409);
             }
 
+            // Calcular preu
+            $priceData = $this->calculateReservationPrice($requestedStart, $requestedEnd);
+            
             $activationDeadline = $requestedStart->copy()->addMinutes(20);
 
-            $reservation = $request->user()->reservations()->create([
+            $reservation = $user->reservations()->create([
                 'vehicle_id' => $vehicle->id,
+                'tenant_id' => $user->tenant_id,
                 'scheduled_start' => $requestedStart,
+                'scheduled_end' => $requestedEnd,
                 'activation_deadline' => $activationDeadline,
+                'total_price' => $priceData['final_price'],
                 'status' => 'pending',
             ]);
 
             return response()->json([
-                'message' => 'Reservation created. You have 20 minutes to activate.',
-                'data' => $reservation
+                'message' => 'Reserva creada correctament',
+                'data' => $reservation->load('vehicle'),
+                'price_details' => $priceData
             ], 201);
         });
     }
@@ -157,6 +190,24 @@ class ReservationController extends Controller
         return response()->json(['message' => 'Reservation cancelled.']);
     }
 
+    /**
+     * Calcular preu estimat sense crear reserva
+     */
+    public function calculatePrice(Request $request)
+    {
+        $validated = $request->validate([
+            'scheduled_start' => 'required|date',
+            'scheduled_end' => 'required|date|after:scheduled_start',
+        ]);
+
+        $start = Carbon::parse($validated['scheduled_start']);
+        $end = Carbon::parse($validated['scheduled_end']);
+        
+        $priceData = $this->calculateReservationPrice($start, $end);
+
+        return response()->json($priceData);
+    }
+
     public function forceFinish(Request $request, Reservation $reservation)
     {
         $this->authorize('forceFinish', $reservation);
@@ -195,5 +246,55 @@ class ReservationController extends Controller
             'cost' => $amount . '€',
             'minutes' => $minutes
         ]);
+    }
+
+    /**
+     * Calcular preu segons regles de pricing:
+     * - 0,10 € per minut
+     * - màxim 5 € per hora
+     * - màxim 45 € per dia (24h)
+     */
+    private function calculateReservationPrice(Carbon $start, Carbon $end): array
+    {
+        $totalMinutes = $start->diffInMinutes($end);
+        
+        $pricePerMinute = 0.10;
+        $basePrice = $totalMinutes * $pricePerMinute;
+        
+        $fullHours = floor($totalMinutes / 60);
+        $remainingMinutes = $totalMinutes % 60;
+        
+        $maxPricePerHour = 5.00;
+        $priceForFullHours = $fullHours * $maxPricePerHour;
+        $priceForRemainingMinutes = $remainingMinutes * $pricePerMinute;
+        
+        $priceWithHourlyLimit = $priceForFullHours + $priceForRemainingMinutes;
+        
+        $fullDays = floor($totalMinutes / 1440);
+        $minutesAfterDays = $totalMinutes % 1440;
+        $maxPricePerDay = 45.00;
+        
+        if ($fullDays > 0) {
+            $priceForFullDays = $fullDays * $maxPricePerDay;
+            
+            $hoursRemaining = floor($minutesAfterDays / 60);
+            $minutesRemaining = $minutesAfterDays % 60;
+            $priceForRemaining = ($hoursRemaining * $maxPricePerHour) + ($minutesRemaining * $pricePerMinute);
+            
+            $finalPrice = $priceForFullDays + $priceForRemaining;
+        } else {
+            $finalPrice = min($priceWithHourlyLimit, $maxPricePerDay);
+        }
+        
+        return [
+            'total_minutes' => $totalMinutes,
+            'hours' => round($totalMinutes / 60, 2),
+            'days' => round($totalMinutes / 1440, 2),
+            'base_price' => round($basePrice, 2),
+            'final_price' => round($finalPrice, 2),
+            'price_per_minute' => $pricePerMinute,
+            'max_per_hour' => $maxPricePerHour,
+            'max_per_day' => $maxPricePerDay,
+        ];
     }
 }

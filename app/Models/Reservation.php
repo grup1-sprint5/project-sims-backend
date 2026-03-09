@@ -13,8 +13,11 @@ class Reservation extends Model
     protected $fillable = [
         'user_id',
         'vehicle_id',
+        'tenant_id',
         'scheduled_start',
+        'scheduled_end',
         'activation_deadline',
+        'total_price',
         'cancelled_at',
         'cancellation_fee',
         'status'
@@ -22,8 +25,10 @@ class Reservation extends Model
 
     protected $casts = [
         'scheduled_start' => 'datetime',
+        'scheduled_end' => 'datetime',
         'activation_deadline' => 'datetime',
         'cancelled_at' => 'datetime',
+        'total_price' => 'float',
         'cancellation_fee' => 'float',
     ];
 
