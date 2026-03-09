@@ -11,17 +11,33 @@
 /public/hot
 /public/build
 /storage/*.key
+/storage/app/*
+!/storage/app/.gitignore
+!/storage/app/public
+/storage/framework/cache/*
+!/storage/framework/cache/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/logs/*
+!/storage/logs/.gitignore
 
 # IDE / OS files
 /.vagrant
 .idea/
-.DS_Store
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
 
 # Composer
 /composer.lock
 
 # Logs and caches
-/storage/logs/
 /.phpunit.result.cache
 /.phpunit.cache
 
@@ -29,6 +45,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+package-lock.json
 
 # SQLite databases
 *.sqlite
@@ -38,7 +55,7 @@ yarn-error.log*
 # Docker
 .docker/
 docker-compose.override.yml
-docker-compose.yml
+
 # Others
 .env.backup
 /.sass-cache
@@ -49,19 +66,12 @@ docker-compose.yml
 /test_*.php
 /test_*.ps1
 /check_*.php
-/.idea
 /.nova
 /.zed
 /auth.json
-/public/build
-/public/hot
-/public/storage
-/storage/*.key
 /storage/pail
-/vendor
 Homestead.json
 Homestead.yaml
-Thumbs.db
 postman_collection.json
 postman_collection_tickets.json
 tmp_insert_test_user.php
