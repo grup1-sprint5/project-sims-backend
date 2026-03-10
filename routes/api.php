@@ -49,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Reservations endpoints (User operations)
     Route::get('reservations', [ReservationController::class, 'index']);
     Route::post('reservations', [ReservationController::class, 'store']);
+    Route::post('reservations/calculate-price', [ReservationController::class, 'calculatePrice']);
     Route::get('reservations/{reservation}', [ReservationController::class, 'show']);
     Route::post('reservations/{reservation}/activate', [ReservationController::class, 'activate']);
     Route::post('reservations/{reservation}/finish', [ReservationController::class, 'finish']);
