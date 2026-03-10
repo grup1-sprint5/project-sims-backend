@@ -9,11 +9,11 @@ class ReservationPolicy
 {
     /**
      * Determine if the user can view any reservations.
-     * Clients can view their own reservations, admins can view all.
+     * Only admins can view all reservations globally.
      */
     public function viewAny(User $user): bool
     {
-        return $user->hasPermissionTo('reservations.view') || $user->hasPermissionTo('reservations.delete');
+        return $user->hasPermissionTo('reservations.delete');
     }
 
     /**
@@ -36,7 +36,7 @@ class ReservationPolicy
      */
     public function create(User $user): bool
     {
-        return $user->hasPermissionTo('reservations.view') || $user->hasPermissionTo('reservations.manage');
+        return $user->hasPermissionTo('reservations.manage') || $user->hasPermissionTo('reservations.delete');
     }
 
     /**

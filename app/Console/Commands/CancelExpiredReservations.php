@@ -8,8 +8,8 @@ use Carbon\Carbon;
 
 class CancelExpiredReservations extends Command
 {
-    protected $signature = 'app:cancel-expired-reservations';
-    protected $description = 'Cancel·la automàticament les reserves pendents que han superat el deadline d'\''activació';
+    protected $signature = 'reservations:cancel-expired';
+    protected $description = 'Cancel·la automàticament les reserves pendents que han superat el deadline d\'activació';
 
     public function handle()
     {
@@ -19,7 +19,7 @@ class CancelExpiredReservations extends Command
             ->get();
 
         if ($expiredReservations->isEmpty()) {
-            $this->info('No hi ha reserves expirades per cancel·lar.');
+            $this->info('No hi ha reserves expirades.');
             return Command::SUCCESS;
         }
 
@@ -28,10 +28,10 @@ class CancelExpiredReservations extends Command
                 'status' => 'cancelled',
                 'cancelled_at' => $now,
             ]);
-            $this->info("Reserva #{$reservation->id} cancel·lada (vehicle: {$reservation->vehicle_id})");
+            $this->info("Reserva #{$reservation->id} cancel·lada");
         }
 
-        $this->info("Total de reserves cancel·lades: {$expiredReservations->count()}");
+        $this->info("Total cancel·lades: {$expiredReservations->count()}");
         return Command::SUCCESS;
     }
 }

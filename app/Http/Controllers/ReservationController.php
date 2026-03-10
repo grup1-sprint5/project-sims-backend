@@ -59,21 +59,20 @@ class ReservationController extends Controller
             $requestedStart = Carbon::parse($validated['scheduled_start']);
             $requestedEnd = Carbon::parse($validated['scheduled_end']);
 
-            // Verificar disponibilitat
+            // Verificar disponibilitat - detectar overlaps estrictes
             $hasConflict = Reservation::where('vehicle_id', $vehicle->id)
                 ->whereIn('status', ['pending', 'active'])
                 ->where(function ($query) use ($requestedStart, $requestedEnd) {
                     $query->where(function ($q) use ($requestedStart, $requestedEnd) {
+                        // Reserves amb scheduled_end definit
                         $q->whereNotNull('scheduled_end')
                           ->where(function ($sq) use ($requestedStart, $requestedEnd) {
-                              $sq->whereBetween('scheduled_start', [$requestedStart, $requestedEnd])
-                                 ->orWhereBetween('scheduled_end', [$requestedStart, $requestedEnd])
-                                 ->orWhere(function ($ssq) use ($requestedStart, $requestedEnd) {
-                                     $ssq->where('scheduled_start', '<=', $requestedStart)
-                                        ->where('scheduled_end', '>=', $requestedEnd);
-                                 });
+                              // Overlap si: start < otherEnd && end > otherStart
+                              $sq->where('scheduled_start', '<', $requestedEnd)
+                                 ->where('scheduled_end', '>', $requestedStart);
                           });
                     })->orWhere(function ($q) use ($requestedStart) {
+                        // Reserves sense scheduled_end (legacy) - marge de 2h
                         $q->whereNull('scheduled_end')
                           ->where('scheduled_start', '>=', $requestedStart->copy()->subHours(2))
                           ->where('scheduled_start', '<=', $requestedStart->copy()->addHours(2));
@@ -195,6 +194,8 @@ class ReservationController extends Controller
      */
     public function calculatePrice(Request $request)
     {
+        $this->authorize('create', Reservation::class);
+
         $validated = $request->validate([
             'scheduled_start' => 'required|date',
             'scheduled_end' => 'required|date|after:scheduled_start',
@@ -266,7 +267,7 @@ class ReservationController extends Controller
         
         $maxPricePerHour = 5.00;
         $priceForFullHours = $fullHours * $maxPricePerHour;
-        $priceForRemainingMinutes = $remainingMinutes * $pricePerMinute;
+        $priceForRemainingMinutes = min($remainingMinutes * $pricePerMinute, $maxPricePerHour);
         
         $priceWithHourlyLimit = $priceForFullHours + $priceForRemainingMinutes;
         
@@ -277,12 +278,18 @@ class ReservationController extends Controller
         if ($fullDays > 0) {
             $priceForFullDays = $fullDays * $maxPricePerDay;
             
+            // Per la part restant després dels dies complets, aplicar topall horari
             $hoursRemaining = floor($minutesAfterDays / 60);
             $minutesRemaining = $minutesAfterDays % 60;
-            $priceForRemaining = ($hoursRemaining * $maxPricePerHour) + ($minutesRemaining * $pricePerMinute);
+            
+            // Preu amb topall horari aplicat a les hores restants
+            $priceForRemainingHours = $hoursRemaining * $maxPricePerHour;
+            $priceForRemainingMinutes = $minutesRemaining * $pricePerMinute;
+            $priceForRemaining = $priceForRemainingHours + $priceForRemainingMinutes;
             
             $finalPrice = $priceForFullDays + $priceForRemaining;
         } else {
+            // Si no hi ha dies complets, aplicar el mínim entre preu amb topall horari i topall diari
             $finalPrice = min($priceWithHourlyLimit, $maxPricePerDay);
         }
         
