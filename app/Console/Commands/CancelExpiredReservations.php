@@ -9,7 +9,7 @@ use Carbon\Carbon;
 class CancelExpiredReservations extends Command
 {
     protected $signature = 'reservations:cancel-expired';
-    protected $description = 'Cancel·la automàticament les reserves pendents que han superat el deadline d\'activació';
+    protected $description = 'Cancel·la reserves pendents que han superat el deadline';
 
     public function handle()
     {
@@ -25,10 +25,10 @@ class CancelExpiredReservations extends Command
 
         foreach ($expiredReservations as $reservation) {
             $reservation->update([
-                'status' => 'cancelled',
+                'status' => 'expired',
                 'cancelled_at' => $now,
             ]);
-            $this->info("Reserva #{$reservation->id} cancel·lada");
+            $this->info("Reserva #{$reservation->id} expirada");
         }
 
         $this->info("Total cancel·lades: {$expiredReservations->count()}");
