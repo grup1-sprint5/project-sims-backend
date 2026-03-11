@@ -9,7 +9,7 @@ class ReservationPolicy
 {
     /**
      * Determine if the user can view any reservations.
-     * Admin only - used by AdminReservationController.
+     * Only admins can view all reservations globally.
      */
     public function viewAny(User $user): bool
     {
@@ -36,7 +36,7 @@ class ReservationPolicy
      */
     public function create(User $user): bool
     {
-        return $user->hasPermissionTo('reservations.manage');
+        return $user->hasPermissionTo('reservations.manage') || $user->hasPermissionTo('reservations.delete');
     }
 
     /**
