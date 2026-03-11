@@ -16,11 +16,16 @@ class TestDataSeeder extends Seeder
      */
     public function run(): void
     {
-        // Get existing users (created by DatabaseSeeder)
-        // ID 1 = Admin, ID 2 = Client, ID 3 = Maintenance
-        $admin = User::find(1);      // Admin
-        $client = User::find(2);     // Client
-        $maint = User::find(3);      // Maintenance
+        // Get existing users (created by DatabaseSeeder) — look up by email to avoid ID assumptions
+        $admin  = User::where('email', 'admin@test.com')->first();
+        $client = User::where('email', 'client@test.com')->first();
+        $maint  = User::where('email', 'maint@test.com')->first();
+
+        // Skip if test users haven't been created yet (DatabaseSeeder must run first)
+        if (!$admin || !$client || !$maint) {
+            echo "⚠️  Test users not found — run DatabaseSeeder first. Skipping TestDataSeeder.\n";
+            return;
+        }
 
         // Create vehicles that match MongoVehicleLocationsSeeder (use updateOrCreate to avoid duplicates)
         $vehicle1 = Vehicle::updateOrCreate(
