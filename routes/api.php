@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\SensorDataController;
 
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\TicketController;
@@ -67,4 +68,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // AI Chatbot endpoint
     Route::post('/chat', [ChatController::class, 'send']);
+
+    // Sensor Data (IoT) endpoints
+    Route::prefix('sensor-data')->name('sensor-data.')->group(function () {
+        Route::get('/', [SensorDataController::class, 'index'])->name('index');
+        Route::get('/devices', [SensorDataController::class, 'devices'])->name('devices');
+        Route::get('/devices/{deviceId}/latest', [SensorDataController::class, 'latestByDevice'])->name('latest');
+    });
 });

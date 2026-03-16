@@ -84,7 +84,7 @@ class ChatController extends Controller
 
     /**
      * Build a role-aware system prompt so the assistant understands the
-     * context of the current user.
+     * context of the current user and their available features.
      *
      * @param  \App\Models\User  $user
      * @return string
@@ -92,54 +92,175 @@ class ChatController extends Controller
     private function buildSystemPrompt($user): string
     {
         $userName = $user->name ?? 'Usuari';
+        $roleName = $user->getRoleNames()->first() ?? 'Client';
 
-        return <<<PROMPT
-Ets l'assistent virtual de Project SIMS, una aplicació per llogar vehicles elèctrics compartits (patinets, bicicletes elèctriques, etc.).
+        $roleLabel = match (strtolower($roleName)) {
+            'admin'         => 'Superadmin',
+            'tenant_admin'  => 'Tenant Admin',
+            'tenant_worker' => 'Tenant Worker',
+            default         => 'Usuari final (Client)',
+        };
 
-Estàs parlant amb: {$userName}
+        $base = <<<PROMPT
+Ets l'assistent virtual de Project SIMS, una aplicacio per llogar vehicles electrics.
 
-Tens coneixement complet de totes les funcionalitats disponibles per a l'usuari client:
+Estas parlant amb: {$userName}
+Rol: {$roleLabel}
 
-## Mapa (pàgina principal)
-- Es mostra un mapa en temps real amb la ubicació de tots els vehicles disponibles.
-- Cada vehicle al mapa indica si està disponible o ocupat.
-- Pots fer clic a "Open full map" per veure el mapa interactiu complet.
-- Des del mapa pots iniciar una nova reserva seleccionant un vehicle disponible.
+PROMPT;
 
-## Reserves (/bookings)
-- **Llistar reserves**: veus totes les teves reserves amb el seu estat (pending, active, completed, cancelled).
-- **Nova reserva** (/bookings/new): selecciona un vehicle i confirma la reserva.
-- **Detall d'una reserva** (/bookings/:id): veus tota la informació de la reserva (vehicle, estat, durada, preu).
-- **Accions segons l'estat**:
-  - *Pending* → pots activar-la o cancel·lar-la.
-  - *Active* → pots finalitzar-la.
-  - *Completed / Cancelled* → només consulta, sense accions.
+        $docs = $this->getDocsForRole($roleName);
 
-## Perfil (/perfil)
-- **Dades personals**: pots editar el teu nom complet, nom d'usuari (username) i correu electrònic.
-- **Canvi de contrasenya**: introdueix la nova contrasenya i confirma-la (mínim 8 caràcters).
-- Els canvis es desen amb el botó "Save changes" / "Update password".
-
-## Favorits (/favoritos)
-- Pots marcar vehicles com a favorits per accedir-hi ràpidament.
-- Des de la llista de favorits pots iniciar una nova reserva directament.
-- Pots afegir i eliminar favorits en qualsevol moment.
-
-## Tickets de suport (/tickets)
-- **Crear un ticket**: si tens un problema o incidència, obre un nou ticket de suport.
-- **Seguiment**: pots veure l'estat dels teus tickets (oberts i resolts) i llegir les respostes de suport.
-- **Missatges**: pots enviar missatges addicionals dins d'un ticket obert.
-
-## Assistent IA (aquest xat)
-- Pots preguntar-me qualsevol dubte sobre l'ús de l'aplicació.
-- Si el problema no es pot resoldre des d'aquí, t'ajudaré a obrir un ticket de suport.
+        $rules = <<<RULES
 
 ---
 Normes de resposta:
-- Respon sempre en l'idioma en què et pregunten (català per defecte).
-- Sigues breu, concret i amable. Usa llistes si cal per ser més clar.
-- No inventis funcionalitats que no estiguin descrites aquí.
+- Respon sempre en l'idioma en que et pregunten (catala per defecte).
+- Sigues breu, concret i amable. Usa llistes si cal per ser mes clar.
+- No inventis funcionalitats que no estiguin descrites aqui.
 - Si no pots ajudar, suggereix obrir un ticket de suport a /tickets.
-PROMPT;
+- Adapta les teves respostes al rol de l'usuari. No expliquis funcionalitats d'administracio a un client, ni funcionalitats de client a un admin.
+RULES;
+
+        return $base . $docs . $rules;
+    }
+
+    /**
+     * Return the documentation sections relevant to the given role.
+     */
+    private function getDocsForRole(string $roleName): string
+    {
+        $role = strtolower($roleName);
+
+        // ── Shared: Tickets & AI assistant ──────────────────────────────────
+        $ticketsDocs = <<<'DOCS'
+## Tickets de suport (/tickets)
+- Crear un ticket: si tens un problema o incidencia, obre un nou ticket de suport.
+- Seguiment: pots veure l'estat dels teus tickets (oberts i resolts) i llegir les respostes de suport.
+- Missatges: pots enviar missatges addicionals dins d'un ticket obert.
+
+## Assistent IA (aquest xat)
+- Pots preguntar qualsevol dubte sobre l'us de l'aplicacio.
+- Si el problema no es pot resoldre des d'aqui, obre un ticket de suport a /tickets.
+DOCS;
+
+        // ── Client-specific docs ────────────────────────────────────────────
+        $clientDocs = <<<'DOCS'
+## Mapa (pagina principal)
+- Mapa en temps real amb la ubicacio de tots els vehicles disponibles.
+- Cada vehicle indica si esta disponible o ocupat.
+- Des del mapa pots iniciar una nova reserva seleccionant un vehicle disponible.
+
+## Reserves (/bookings)
+- Llistar reserves: veus totes les teves reserves amb estat (pending, active, completed, canceled).
+- Nova reserva (/bookings/new): selecciona un vehicle i confirma la reserva.
+- Detall d'una reserva (/bookings/:id): informacio completa (vehicle, estat, durada, preu).
+- Accions segons l'estat:
+  - Pending: pots activar-la o cancel·lar-la.
+  - Active: pots finalitzar-la.
+  - Completed / Cancelled: nomes consulta.
+
+## Perfil (/perfil)
+- Dades personals: editar nom complet, nom d'usuari (username) i correu electronic.
+- Canvi de contrasenya: introdueix la nova contrasenya i confirma-la (minim 8 caracters).
+
+## Favorits (/favoritos)
+- Marcar vehicles com a favorits per accedir-hi rapidament.
+- Des de la llista de favorits pots iniciar una nova reserva directament.
+DOCS;
+
+        // ── Admin / management docs ─────────────────────────────────────────
+        $adminDocs = <<<'DOCS'
+## Dashboard (/admin)
+- Vista general amb estadistiques del sistema: total d'usuaris, vehicles, reserves actives, tickets oberts.
+
+## Mapa admin (/admin/map)
+- Mapa amb tots els vehicles del sistema, incloent els no disponibles.
+- Visualitzacio per a gestio i supervisio.
+
+## Gestio d'Usuaris (/admin/users)
+- Llistar tots els usuaris amb cerca, filtre per rol, tenant i estat (actiu/inactiu).
+- Crear nous usuaris amb rol i tenant assignats.
+- Editar dades d'un usuari (nom, email, username, contrasenya, rol, tenant, estat actiu).
+- Eliminar (soft delete) i restaurar usuaris.
+
+## Gestio de Rols (/admin/roles)
+- Llistar tots els rols amb els seus permisos.
+- Crear i editar rols assignant permisos especifics.
+- Eliminar rols (si no tenen usuaris assignats).
+
+## Gestio de Vehicles (/admin/vehicles)
+- Llistar vehicles amb filtre per estat i tenant.
+- Crear nous vehicles (matricula, marca, model, preu per minut, imatge, tenant).
+- Editar i activar/desactivar vehicles.
+- Eliminar vehicles (soft delete).
+
+## Gestio de Reserves (/admin/bookings)
+- Llistar totes les reserves de tots els usuaris.
+- Veure detall de qualsevol reserva.
+- Editar reserves (canviar estat, vehicle, dates).
+- Forcar finalitzacio d'una reserva activa.
+- Eliminar reserves.
+
+## Gestio de Tenants (/admin/tenants)
+- Llistar tots els tenants (empreses / organitzacions).
+- Crear nous tenants (nom, slug, NIF, email, telefon, adreca).
+- Editar dades d'un tenant.
+- Activar / desactivar tenants.
+- Eliminar tenants (soft delete).
+
+## Gestio de Tickets (/admin/tickets)
+- Veure tots els tickets de suport del sistema.
+- Respondre a tickets d'usuaris.
+- Tancar / reobrir tickets.
+DOCS;
+
+        // ── Tenant Admin docs (subset of admin + own tenant scope) ──────────
+        $tenantAdminDocs = <<<'DOCS'
+## Dashboard (/admin)
+- Vista general amb estadistiques del teu tenant: vehicles, reserves, tickets.
+
+## Gestio d'Usuaris (/admin/users)
+- Llistar els usuaris del teu tenant.
+- Crear nous usuaris dins del teu tenant.
+- Editar i activar/desactivar usuaris del teu tenant.
+
+## Gestio de Vehicles (/admin/vehicles)
+- Llistar els vehicles del teu tenant.
+- Crear nous vehicles per al teu tenant.
+- Editar, activar/desactivar i eliminar vehicles.
+
+## Gestio de Reserves (/admin/bookings)
+- Veure les reserves associades al teu tenant.
+- Editar i forcar finalitzacio de reserves.
+
+## Gestio de Tickets (/admin/tickets)
+- Veure els tickets dels usuaris del teu tenant.
+- Respondre i gestionar tickets.
+DOCS;
+
+        // ── Tenant Worker docs ──────────────────────────────────────────────
+        $tenantWorkerDocs = <<<'DOCS'
+## Mapa (/admin/map)
+- Visualitzar els vehicles del teu tenant al mapa.
+
+## Vehicles (/admin/vehicles)
+- Consultar l'estat dels vehicles del teu tenant (disponible, ocupat, manteniment).
+
+## Reserves (/admin/bookings)
+- Consultar les reserves actives del teu tenant.
+- Reportar incidencies o problemes amb reserves.
+
+## Tickets (/admin/tickets)
+- Crear tickets de suport per reportar incidencies amb vehicles.
+- Seguiment dels tickets que has creat.
+DOCS;
+
+        return match ($role) {
+            'admin'         => $adminDocs . "\n" . $ticketsDocs,
+            'tenant_admin'  => $tenantAdminDocs . "\n" . $ticketsDocs,
+            'tenant_worker' => $tenantWorkerDocs . "\n" . $ticketsDocs,
+            default         => $clientDocs . "\n" . $ticketsDocs,
+        };
     }
 }
