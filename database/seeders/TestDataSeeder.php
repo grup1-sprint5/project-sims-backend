@@ -27,21 +27,23 @@ class TestDataSeeder extends Seeder
             return;
         }
 
-        // Create vehicles that match MongoVehicleLocationsSeeder (use updateOrCreate to avoid duplicates)
-        $vehicle1 = Vehicle::updateOrCreate(
-            ['license_plate' => 'ABC123'],
-            ['brand' => 'Toyota', 'model' => 'Yaris', 'active' => true]
-        );
+        // Reuse real vehicles if they already exist; only create missing ones for tests
+        $vehicles = Vehicle::query()->orderBy('id')->take(3)->get();
 
-        $vehicle2 = Vehicle::updateOrCreate(
-            ['license_plate' => 'DEF456'],
-            ['brand' => 'Ford', 'model' => 'Fiesta', 'active' => false]
-        );
+        while ($vehicles->count() < 3) {
+            $suffix = strtoupper(substr(uniqid(), -6));
+            $newVehicle = Vehicle::create([
+                'license_plate' => $suffix,
+                'brand' => 'Test',
+                'model' => 'Vehicle',
+                'active' => false,
+            ]);
+            $vehicles->push($newVehicle);
+        }
 
-        $vehicle3 = Vehicle::updateOrCreate(
-            ['license_plate' => 'GHI789'],
-            ['brand' => 'Nissan', 'model' => 'March', 'active' => true]
-        );
+        $vehicle1 = $vehicles->get(0);
+        $vehicle2 = $vehicles->get(1);
+        $vehicle3 = $vehicles->get(2);
 
         // Create test tickets
         Ticket::create([
