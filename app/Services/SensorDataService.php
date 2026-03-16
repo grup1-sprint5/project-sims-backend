@@ -3,9 +3,46 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 class SensorDataService
 {
+    private function iotBaseUrl(): string
+    {
+        $base = env('IOT_MICROSERVICE_URL')
+            ?? env('IOT_API_URL')
+            ?? 'http://host.docker.internal:8002';
+
+        return rtrim((string) $base, '/');
+    }
+
+    private function iotTimeoutSeconds(): int
+    {
+        return (int) (env('IOT_TIMEOUT', 3));
+    }
+
+    /**
+     * Fa una petició al microservei IoT (FastAPI) i retorna el JSON.
+     */
+    private function iotGet(string $path, array $query = []): array
+    {
+        $url = $this->iotBaseUrl() . $path;
+
+        $res = Http::timeout($this->iotTimeoutSeconds())
+            ->acceptJson()
+            ->get($url, $query);
+
+        if (!$res->successful()) {
+            return [
+                'success' => false,
+                'message' => $res->body() ?: ('IoT microservice error (' . $res->status() . ')'),
+                'status'  => $res->status(),
+            ];
+        }
+
+        return (array) $res->json();
+    }
+
     /**
      * Obté les últimes lectures de sensors des de MongoDB.
      *
@@ -16,33 +53,21 @@ class SensorDataService
      */
     public function getReadings(int $limit = 50, ?string $deviceId = null, ?string $sensorType = null): array
     {
-        $query = DB::connection('mongodb')->table('sensor_readings');
+        // Arquitectura del sprint: Laravel consumeix el microservei IoT via API.
+        // Això evita inconsistències entre el Mongo local del docker-compose i MongoDB Atlas.
 
+        $query = ['limit' => $limit];
         if ($deviceId) {
-            $query->where('device_id', $deviceId);
+            $query['device_id'] = $deviceId;
         }
-
         if ($sensorType) {
-            $query->where('sensor_type', $sensorType);
+            $query['sensor_type'] = $sensorType;
         }
 
-        $readings = $query->orderBy('created_at', 'desc')
-                          ->limit($limit)
-                          ->get();
+        $json = $this->iotGet('/api/sensor-data', $query);
+        $readings = $json['data']['readings'] ?? [];
 
-        return $readings->map(function ($reading) {
-            $arr = (array) $reading;
-            // Convertim l'ObjectId de MongoDB a string llegible
-            if (isset($arr['_id'])) {
-                $arr['id'] = (string) $arr['_id'];
-                unset($arr['_id']);
-            }
-            // Normalitzem el camp created_at si és un objecte UTCDateTime
-            if (isset($arr['created_at']) && is_object($arr['created_at'])) {
-                $arr['created_at'] = (string) $arr['created_at'];
-            }
-            return $arr;
-        })->toArray();
+        return is_array($readings) ? $readings : [];
     }
 
     /**
@@ -52,12 +77,19 @@ class SensorDataService
      */
     public function getDeviceIds(): array
     {
-        $ids = DB::connection('mongodb')
-            ->table('sensor_readings')
-            ->distinct('device_id')
-            ->get();
+        $json = $this->iotGet('/api/sensor-data/devices');
 
-        return $ids->map(fn($item) => $item->device_id ?? (string) $item)->filter()->values()->toArray();
+        // FastAPI retorna: data: { devices: string[], total: number }
+        $devices = $json['data']['devices'] ?? $json['data'] ?? [];
+        if (!is_array($devices)) {
+            return [];
+        }
+
+        // Normalitza i filtra valors buits
+        $devices = array_values(array_filter(array_map(fn($d) => is_string($d) ? $d : null, $devices)));
+        sort($devices);
+
+        return $devices;
     }
 
     /**
@@ -68,25 +100,10 @@ class SensorDataService
      */
     public function getLatestByDevice(string $deviceId): ?array
     {
-        $doc = DB::connection('mongodb')
-            ->table('sensor_readings')
-            ->where('device_id', $deviceId)
-            ->orderBy('created_at', 'desc')
-            ->first();
+        $encoded = rawurlencode($deviceId);
+        $json = $this->iotGet('/api/sensor-data/device/' . $encoded . '/latest');
 
-        if (!$doc) {
-            return null;
-        }
-
-        $arr = (array) $doc;
-        if (isset($arr['_id'])) {
-            $arr['id'] = (string) $arr['_id'];
-            unset($arr['_id']);
-        }
-        if (isset($arr['created_at']) && is_object($arr['created_at'])) {
-            $arr['created_at'] = (string) $arr['created_at'];
-        }
-
-        return $arr;
+        $reading = $json['data'] ?? null;
+        return is_array($reading) ? $reading : null;
     }
 }
