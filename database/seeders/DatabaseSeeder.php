@@ -64,7 +64,7 @@ class DatabaseSeeder extends Seeder
         $maintenance->assignRole('Maintenance');
 
         // 5. Crear TENANT ADMIN para SIMS Corp
-        $simsTenant = \App\Models\Tenant::where('slug', 'sims-corp')->first();
+        $simsTenant = \App\Models\Tenant::where('id', 'sims-corp')->orWhere('slug', 'sims-corp')->first();
         $tenantAdmin1 = User::firstOrCreate(
             ['email' => 'admin@simscorp.com'],
             [
@@ -78,7 +78,7 @@ class DatabaseSeeder extends Seeder
         $tenantAdmin1->assignRole('TenantAdmin');
 
         // 6. Crear TENANT ADMIN para EcoMove SL
-        $ecoTenant = \App\Models\Tenant::where('slug', 'ecomove')->first();
+        $ecoTenant = \App\Models\Tenant::where('id', 'ecomove')->orWhere('slug', 'ecomove')->first();
         $tenantAdmin2 = User::firstOrCreate(
             ['email' => 'admin@ecomove.es'],
             [

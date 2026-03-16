@@ -27,7 +27,23 @@ class AuthenticateTenantToken
             return $this->unauthenticated();
         }
 
-        $user = $accessToken->tokenable;
+        $tokenableType = $accessToken->tokenable_type;
+        $tokenableId = $accessToken->tokenable_id;
+
+        if (!is_string($tokenableType) || !class_exists($tokenableType)) {
+            return $this->unauthenticated();
+        }
+
+        $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
+        $abilities = is_array($accessToken->abilities) ? $accessToken->abilities : [];
+
+        if ($tenantId && !in_array("tenant:{$tenantId}", $abilities, true)) {
+            return $this->unauthenticated();
+        }
+
+        // Resolve the authenticated user from the tenant DB context.
+        // Do not use $accessToken->tokenable because the token model lives on central DB.
+        $user = $tokenableType::query()->find($tokenableId);
 
         if (!$user) {
             return $this->unauthenticated();

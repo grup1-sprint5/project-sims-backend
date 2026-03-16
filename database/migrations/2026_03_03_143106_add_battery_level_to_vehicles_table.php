@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!Schema::hasTable('vehicles') || Schema::hasColumn('vehicles', 'battery_level')) {
+            return;
+        }
+
         Schema::table('vehicles', function (Blueprint $table) {
             $table->integer('battery_level')->default(100)->after('active');
         });
@@ -21,6 +25,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (!Schema::hasTable('vehicles') || !Schema::hasColumn('vehicles', 'battery_level')) {
+            return;
+        }
+
         Schema::table('vehicles', function (Blueprint $table) {
             $table->dropColumn('battery_level');
         });
