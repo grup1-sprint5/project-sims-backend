@@ -3,6 +3,8 @@ services:
     build: .
     image: project-sims-backend_app
     container_name: project_sims_app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./:/var/www/html
       - vendor:/var/www/html/vendor
@@ -11,6 +13,7 @@ services:
       - .env
     depends_on:
       - db
+      - mongo
     ports:
       - "8001:8001"
     command: ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8001"]
@@ -27,7 +30,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "${DB_PORT}:5432"
+      - "${DB_HOST_PORT:-5433}:5432"
 
   pgadmin:
     image: dpage/pgadmin4
@@ -44,7 +47,16 @@ services:
     depends_on:
       - db
 
+  mongo:
+    image: mongo:6
+    container_name: project_sims_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
 volumes:
+  mongo_data:
   postgres_data:
   pgadmin_data:
   vendor:

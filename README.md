@@ -35,6 +35,30 @@ docker compose exec app php artisan key:generate --force
 docker compose exec app php artisan migrate --force
 ```
 
+7) (Optional) Seed database with test data:
+
+```bash
+docker compose exec app php artisan db:seed
+```
+
+## Scheduler (Cancel·lació automàtica de reserves)
+
+El backend inclou un scheduler que cancel·la automàticament les reserves pendents que han superat el `activation_deadline`.
+
+Per executar el scheduler en producció, afegeix aquest cron job al servidor:
+
+```bash
+* * * * * cd /path-to-project && docker compose exec app php artisan schedule:run >> /dev/null 2>&1
+```
+
+Per desenvolupament local, executa:
+
+```bash
+docker compose exec app php artisan schedule:work
+```
+
+Això executarà el command `reservations:cancel-expired` cada minut.
+
 ## Migrations
 ### Refresh migrations
 This will delete all the DB and exec all the migrations again:

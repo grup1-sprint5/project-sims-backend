@@ -20,13 +20,19 @@ class TestDataSeeder extends Seeder
         $password = Hash::make('password');
 
         // Get tenants
-        $simsTenant = \App\Models\Tenant::where('slug', 'sims-corp')->first();
-        $ecoTenant = \App\Models\Tenant::where('slug', 'ecomove')->first();
+        $simsTenant = \App\Models\Tenant::where('id', 'sims-corp')->orWhere('slug', 'sims-corp')->first();
+        $ecoTenant = \App\Models\Tenant::where('id', 'ecomove')->orWhere('slug', 'ecomove')->first();
 
-        // Get existing users (created by DatabaseSeeder)
-        $admin = User::find(1);      // SuperAdmin (no tenant)
-        $client = User::find(2);     // Client
-        $maint = User::find(3);      // Maintenance
+        // Get existing users (created by DatabaseSeeder) — look up by email to avoid ID assumptions
+        $admin  = User::where('email', 'admin@test.com')->first() ?: User::find(1);
+        $client = User::where('email', 'client@test.com')->first() ?: User::find(2);
+        $maint  = User::where('email', 'maint@test.com')->first() ?: User::find(3);
+
+        // Skip if test users haven't been created yet (DatabaseSeeder must run first)
+        if (!$admin || !$client || !$maint) {
+            echo "⚠️  Test users not found — run DatabaseSeeder first. Skipping TestDataSeeder.\n";
+            return;
+        }
 
         // Assign existing users to tenants
         if ($client && $simsTenant) {

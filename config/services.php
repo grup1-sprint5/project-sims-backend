@@ -35,4 +35,27 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | IA Chat (OpenWebUI compatible)
+    |--------------------------------------------------------------------------
+    */
+    'ia' => [
+        'url'   => env('IA_API_URL', 'http://api-ia.daw2.iesmontsia.org:3000/api'),
+        'key'   => env('IA_API_KEY'),
+        'model' => env('IA_MODEL', 'llama3.2:3b'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | IoT Microservice (FastAPI)
+    |--------------------------------------------------------------------------
+    |
+    | Laravel acts as the bridge: frontend -> Laravel -> IoT microservice.
+    */
+    'iot' => [
+        'url' => env('IOT_MICROSERVICE_URL', env('IOT_API_URL', 'http://host.docker.internal:8002')),
+        'timeout' => (int) env('IOT_TIMEOUT', 3),
+    ],
+
 ];
