@@ -10,28 +10,20 @@ return new class extends Migration
     {
         Schema::create('trips', function (Blueprint $table) {
             $table->id();
-            
-            // Relación con la reserva
-            $table->foreignId('reservation_id')->constrained()->onDelete('cascade')->unique();
-
-            // Tiempos
-            $table->timestamp('engine_started_at');
+            $table->string('tenant_id')->index();
+            $table->foreignId('reservation_id')->nullable()->constrained()->onDelete('set null');
+            $table->foreignId('user_id')->nullable()->constrained()->onDelete('set null');
+            $table->timestamp('engine_started_at')->nullable();
             $table->timestamp('engine_stopped_at')->nullable();
-
-            // Dinero
             $table->decimal('total_amount', 10, 2)->nullable();
             $table->decimal('penalty_amount', 10, 2)->default(0);
-
-            // Datos del viaje
             $table->integer('minutes_driven')->nullable();
             $table->string('start_location')->nullable();
             $table->string('end_location')->nullable();
-            
-            // 🔥 FALTABA ESTA LÍNEA (Visible en tu foto 2)
-            $table->text('notes')->nullable(); 
-
-            $table->timestamps();   // created_at, updated_at
-            $table->softDeletes();  // deleted_at (Visible en tu foto 2)
+            $table->text('notes')->nullable();
+            $table->enum('status', ['scheduled', 'ongoing', 'completed', 'cancelled'])->default('scheduled');
+            $table->timestamps();
+            $table->softDeletes();
         });
     }
 

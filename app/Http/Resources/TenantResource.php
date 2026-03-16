@@ -16,15 +16,13 @@ class TenantResource extends JsonResource
     {
         return [
             'id'         => $this->id,
+            'slug'       => $this->id,   // backward-compat alias
             'name'       => $this->name,
-            'slug'       => $this->slug,
             'tax_id'     => $this->tax_id,
             'email'      => $this->email,
             'phone'      => $this->phone,
             'address'    => $this->address,
             'active'     => $this->active,
-            'users_count'    => $this->whenCounted('users'),
-            'vehicles_count' => $this->whenCounted('vehicles'),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

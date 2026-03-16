@@ -16,13 +16,7 @@ class UpdateTenantRequest extends FormRequest
     {
         return [
             'name'    => ['sometimes', 'string', 'max:255'],
-            'slug'    => [
-                'sometimes',
-                'string',
-                'max:255',
-                'alpha_dash',
-                Rule::unique('tenants', 'slug')->ignore($this->route('tenant')),
-            ],
+            // slug/id is immutable after creation (it is the primary key and schema name)
             'tax_id'  => [
                 'nullable',
                 'string',
@@ -34,17 +28,5 @@ class UpdateTenantRequest extends FormRequest
             'address' => ['nullable', 'string', 'max:500'],
             'active'  => ['sometimes', 'boolean'],
         ];
-    }
-
-    /**
-     * Normalizar slug a minúsculas antes de validar.
-     */
-    protected function prepareForValidation(): void
-    {
-        if ($this->has('slug')) {
-            $this->merge([
-                'slug' => strtolower($this->slug),
-            ]);
-        }
     }
 }

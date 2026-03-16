@@ -43,7 +43,11 @@ class TenantsSeeder extends Seeder
         ];
 
         foreach ($tenants as $tenant) {
-            Tenant::firstOrCreate(['slug' => $tenant['slug']], $tenant);
+            $payload = $tenant;
+            $payload['id'] = $tenant['slug'];
+            unset($payload['slug']);
+
+            Tenant::firstOrCreate(['id' => $payload['id']], $payload);
         }
     }
 }

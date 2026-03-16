@@ -13,13 +13,15 @@ class Vehicle extends Model
     use HasFactory, SoftDeletes, BelongsToTenant;
 
     protected $fillable = [
-        'tenant_id',
+        'tenant_id',  // string slug, auto-assigned by BelongsToTenant
         'license_plate',
         'brand',
         'model',
         'active',
         'price_per_minute',
         'image_url',
+        'battery_level',
+        'status',
     ];
 
     protected $casts = [

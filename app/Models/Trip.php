@@ -12,8 +12,9 @@ class Trip extends Model
     use HasFactory, SoftDeletes, BelongsToTenant;
 
     protected $fillable = [
-        'tenant_id',
+        'tenant_id',  // string slug, auto-assigned by BelongsToTenant
         'reservation_id',
+        'user_id',
         'engine_started_at',
         'engine_stopped_at',
         'total_amount',
@@ -21,7 +22,8 @@ class Trip extends Model
         'minutes_driven',
         'start_location',
         'end_location',
-        'notes'
+        'notes',
+        'status',
     ];
 
     protected $casts = [

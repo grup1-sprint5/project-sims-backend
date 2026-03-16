@@ -9,18 +9,14 @@ use Illuminate\Database\Eloquent\Scope;
 class TenantScope implements Scope
 {
     /**
-     * Apply the tenant scope to a given Eloquent query builder.
-     *
-     * SuperAdmin users see all records (no filter applied).
-     * Other authenticated users only see records belonging to their tenant.
-     * Unauthenticated contexts (e.g. console, queue) are not filtered.
+     * With schema-per-tenant isolation (stancl/tenancy), the PostgreSQL schema
+     * already restricts every query to the current tenant's data.
+     * No additional SQL filter on `tenant_id` is necessary.
+     * The column is kept for backward compatibility with policy checks.
      */
     public function apply(Builder $builder, Model $model): void
     {
-        $user = auth()->user();
-
-        if ($user && !$user->isSuperAdmin()) {
-            $builder->where($model->getTable() . '.tenant_id', $user->tenant_id);
-        }
+        // No-op: schema isolation via stancl/tenancy handles tenant scoping.
     }
 }
+

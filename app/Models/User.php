@@ -43,7 +43,7 @@ class User extends Authenticatable
         'email',
         'password',
         'active',
-        'tenant_id',
+        'tenant_id',  // string slug, auto-assigned by BelongsToTenant
     ];
 
     /**
