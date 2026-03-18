@@ -1,0 +1,37 @@
+name: Deploy SIMS Production
+
+on:
+  push:
+    branches: [ main ] # Se activa solo cuando subes cambios a 'main'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to DigitalOcean via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          port: 22
+          script: |
+            cd /var/www/sims-back
+            
+            # 1. Bajar los últimos cambios del repositorio
+            git pull origin main
+            
+            # 2. Levantar los contenedores (esto leerá tu .env del servidor)
+            docker compose up -d --build
+            
+            # 3. Ejecutar las migraciones dentro del contenedor 'api'
+            docker compose exec -T api php artisan migrate --force
+            
+            # 4. Limpiar y regenerar caches
+            docker compose exec -T api php artisan config:cache
+            docker compose exec -T api php artisan route:cache
+            
+            echo "🚀 Deploy completado con éxito"
