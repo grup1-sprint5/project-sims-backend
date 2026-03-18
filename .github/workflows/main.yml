@@ -2,7 +2,7 @@ name: Deploy SIMS Production
 
 on:
   push:
-    branches: [ develop ] # <--- CAMBIA 'main' por 'develop' AQUÍ
+    branches: [ develop ] 
 
 jobs:
   deploy:
@@ -11,15 +11,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Deploy to DigitalOcean
+      - name: Deploy to DigitalOcean via SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.DEPLOY_HOST_IP }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
           port: 22
+          # ESTO ES LO QUE FALTA:
+          format: base64 
           script: |
             cd /var/www/sims-back
-            git pull origin develop # <--- TAMBIÉN CAMBIA ESTO AQUÍ
+            
+            # Forzamos que Git confíe en la carpeta (evita errores de seguridad)
+            git config --global --add safe.directory /var/www/sims-back
+            
+            # Actualizamos código
+            git pull origin develop
+            
+            # Reconstruimos contenedores
             docker compose up -d --build
+            
+            # Comandos de Laravel (con -T para que funcione en scripts)
             docker compose exec -T api php artisan migrate --force
+            docker compose exec -T api php artisan config:cache
+            docker compose exec -T api php artisan route:cache
