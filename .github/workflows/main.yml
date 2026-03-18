@@ -2,7 +2,7 @@ name: Deploy SIMS Production
 
 on:
   push:
-    branches: [ develop ] 
+    branches: [ develop ]
 
 jobs:
   deploy:
@@ -16,23 +16,12 @@ jobs:
         with:
           host: ${{ secrets.DEPLOY_HOST_IP }}
           username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }} # Usa el nombre del secret nuevo
           port: 22
-          # ESTO ES LO QUE FALTA:
-          format: base64 
           script: |
             cd /var/www/sims-back
-            
-            # Forzamos que Git confíe en la carpeta (evita errores de seguridad)
             git config --global --add safe.directory /var/www/sims-back
-            
-            # Actualizamos código
-            git pull origin develop
-            
-            # Reconstruimos contenedores
+            git fetch origin develop
+            git reset --hard origin/develop
             docker compose up -d --build
-            
-            # Comandos de Laravel (con -T para que funcione en scripts)
             docker compose exec -T api php artisan migrate --force
-            docker compose exec -T api php artisan config:cache
-            docker compose exec -T api php artisan route:cache
