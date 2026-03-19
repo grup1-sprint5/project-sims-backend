@@ -16,17 +16,22 @@ jobs:
         with:
           host: ${{ secrets.DEPLOY_HOST_IP }}
           username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }} # Usa el nombre del secret nuevo
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: 22
           script: |
             cd /var/www/sims-back
             git fetch origin develop
             git reset --hard origin/develop
             
-            # Reconstruir y levantar
+            # Forzamos una parada limpia antes de subir lo nuevo
+            docker compose down
+            
+            # Levantamos y reconstruimos
             docker compose up -d --build
             
-            # Limpiar y Migrar (usando el nombre 'app' del YAML anterior)
+            # Esperamos 10-15 segundos para que PHP y la DB se saluden
+            sleep 15
+            
+            # Ejecutamos los comandos de Laravel
             docker compose exec -T app php artisan migrate --force
             docker compose exec -T app php artisan config:cache
-            docker compose exec -T app php artisan route:cache
