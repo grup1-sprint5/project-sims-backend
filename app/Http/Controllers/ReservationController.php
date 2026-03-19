@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Reservation;
+use App\Models\Tenant;
 use App\Models\Vehicle;
 use App\Models\Trip;
 use Illuminate\Http\Request;
@@ -17,18 +18,60 @@ class ReservationController extends Controller
         $this->authorize('viewAny', Reservation::class);
 
         $user = Auth::user();
+        $currentTenant = function_exists('tenant') ? tenant()?->id : null;
 
-        // Admin o Manager puede ver todas
+        // Admin/Manager can see reservations (scoped by tenant via global scope)
         if ($user->hasPermissionTo('reservations.manage')) {
-            return Reservation::with(['user', 'vehicle', 'trip'])
-                ->orderBy('scheduled_start', 'desc')
-                ->get();
+            // SuperAdmin accessing from "central" tenant sees all reservations from all other tenants
+            if ($user->isSuperAdmin() && $currentTenant === 'central') {
+                return $this->indexForSuperAdmin();
+            }
+
+            $query = Reservation::with(['user', 'vehicle', 'trip', 'tenant'])
+                ->orderBy('scheduled_start', 'desc');
+            return $query->get();
         }
 
         return Reservation::where('user_id', $user->id)
             ->with(['vehicle', 'trip'])
             ->orderBy('scheduled_start', 'desc')
             ->get();
+    }
+
+    private function indexForSuperAdmin()
+    {
+        $originalTenant = function_exists('tenant') ? tenant() : null;
+        $rows = collect();
+
+        // Get all active tenants EXCEPT the "central" tenant (which is for SuperAdmin)
+        $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
+
+        foreach ($tenants as $tenant) {
+            tenancy()->initialize($tenant);
+
+            $tenantReservations = Reservation::with(['user', 'vehicle', 'trip'])
+                ->orderBy('scheduled_start', 'desc')
+                ->get()
+                ->map(function ($reservation) use ($tenant) {
+                    $data = $reservation->toArray();
+                    $data['tenant_id'] = $tenant->id;
+                    $data['tenant'] = [
+                        'id' => $tenant->id,
+                        'name' => $tenant->name,
+                    ];
+                    return $data;
+                });
+
+            $rows = $rows->concat($tenantReservations);
+        }
+
+        if ($originalTenant) {
+            tenancy()->initialize($originalTenant);
+        } else {
+            tenancy()->end();
+        }
+
+        return $rows->sortByDesc('scheduled_start')->values();
     }
 
     public function store(Request $request)

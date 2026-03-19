@@ -12,15 +12,22 @@ use Spatie\Permission\Models\Role;
 class RoleController extends Controller
 {
     /**
-     * List all roles with their permissions.
-     * Supports ?search= filter and pagination.
-     * Requires 'roles.view' permission.
+     * List all roles with permissions.
      */
     public function index(Request $request)
     {
         $this->authorize('viewAny', Role::class);
 
+        $user = auth()->user();
         $query = Role::with('permissions');
+
+        if (!$user->isSuperAdmin()) {
+            $query->where('name', '!=', 'SuperAdmin')
+                ->where(function ($q) use ($user) {
+                    $q->whereNull('tenant_id')
+                        ->orWhere('tenant_id', $user->tenant_id);
+                });
+        }
 
         if ($search = $request->input('search')) {
             $query->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%']);
@@ -33,17 +40,18 @@ class RoleController extends Controller
 
     /**
      * Create a new role with optional permissions.
-     * Requires 'roles.manage' permission.
      */
     public function store(StoreRoleRequest $request)
     {
         $this->authorize('create', Role::class);
 
         $data = $request->validated();
+        $user = auth()->user();
 
         $role = Role::create([
-            'name'       => $data['name'],
+            'name' => $data['name'],
             'guard_name' => $data['guard_name'] ?? 'web',
+            'tenant_id' => $user->isSuperAdmin() ? null : $user->tenant_id,
         ]);
 
         if (!empty($data['permissions'])) {
@@ -53,10 +61,6 @@ class RoleController extends Controller
         return (new RoleResource($role->load('permissions')))->response()->setStatusCode(201);
     }
 
-    /**
-     * Show a specific role with its permissions.
-     * Requires 'roles.view' permission.
-     */
     public function show(Role $role)
     {
         $this->authorize('view', $role);
@@ -64,19 +68,20 @@ class RoleController extends Controller
         return new RoleResource($role->load('permissions'));
     }
 
-    /**
-     * Update a role's name and/or permissions.
-     * Requires 'roles.manage' permission.
-     * System roles (Admin, Client, Maintenance) cannot be modified.
-     */
     public function update(UpdateRoleRequest $request, Role $role)
     {
         $this->authorize('update', $role);
 
+        if (strtolower($role->name) === 'superadmin') {
+            return response()->json([
+                'message' => 'Cannot modify the SuperAdmin role',
+            ], 403);
+        }
+
         $data = $request->validated();
 
         $role->update([
-            'name'       => $data['name'] ?? $role->name,
+            'name' => $data['name'] ?? $role->name,
             'guard_name' => $data['guard_name'] ?? $role->guard_name,
         ]);
 
@@ -87,14 +92,15 @@ class RoleController extends Controller
         return new RoleResource($role->load('permissions'));
     }
 
-    /**
-     * Delete a role.
-     * Requires 'roles.delete' permission.
-     * System roles (Admin, Client, Maintenance) cannot be deleted.
-     */
     public function destroy(Role $role)
     {
         $this->authorize('delete', $role);
+
+        if (strtolower($role->name) === 'superadmin') {
+            return response()->json([
+                'message' => 'Cannot delete the SuperAdmin role',
+            ], 403);
+        }
 
         $role->delete();
 

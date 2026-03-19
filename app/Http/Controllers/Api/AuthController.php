@@ -31,7 +31,13 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = $user->createToken('api-token')->plainTextToken;
+        $tenantId = null;
+        if (function_exists('tenant') && tenant()) {
+            $tenantId = (string) tenant('id');
+        }
+
+        $abilities = $tenantId ? ["tenant:{$tenantId}"] : ['tenant:central'];
+        $token = $user->createToken('api-token', $abilities)->plainTextToken;
 
         return response()->json([
             'message' => 'Login successful',

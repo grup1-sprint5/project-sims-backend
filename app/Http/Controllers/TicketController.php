@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Http\Resources\TicketResource;
 use Illuminate\Http\Request;
@@ -23,10 +24,16 @@ class TicketController extends Controller
     public function index()
     {
         $user = Auth::user();
+        $currentTenant = function_exists('tenant') ? tenant()?->id : null;
 
-        if ($user->hasPermissionTo('tickets.delete')) {
-            // Admin or support: all tickets
-            $tickets = Ticket::with(['user', 'messages'])->orderBy('created_at', 'desc')->get();
+        // Admin/Support sees tickets (scoped by tenant via global scope)
+        if ($user->hasPermissionTo('tickets.manage')) {
+            // SuperAdmin accessing from "central" tenant sees all tickets from all other tenants
+            if ($user->isSuperAdmin() && $currentTenant === 'central') {
+                return $this->indexForSuperAdmin();
+            }
+
+            $tickets = Ticket::with(['user', 'messages', 'tenant'])->orderBy('created_at', 'desc')->get();
             return TicketResource::collection($tickets);
         }
 
@@ -40,6 +47,42 @@ class TicketController extends Controller
         }
 
         return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    private function indexForSuperAdmin()
+    {
+        $originalTenant = function_exists('tenant') ? tenant() : null;
+        $rows = collect();
+
+        // Get all active tenants EXCEPT the "central" tenant (which is for SuperAdmin)
+        $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
+
+        foreach ($tenants as $tenant) {
+            tenancy()->initialize($tenant);
+
+            $tenantTickets = Ticket::with(['user', 'messages'])
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($ticket) use ($tenant) {
+                    $data = (new TicketResource($ticket))->toArray(request());
+                    $data['tenant_id'] = $tenant->id;
+                    $data['tenant'] = [
+                        'id' => $tenant->id,
+                        'name' => $tenant->name,
+                    ];
+                    return $data;
+                });
+
+            $rows = $rows->concat($tenantTickets);
+        }
+
+        if ($originalTenant) {
+            tenancy()->initialize($originalTenant);
+        } else {
+            tenancy()->end();
+        }
+
+        return response()->json(['data' => $rows->sortByDesc('created_at')->values()]);
     }
 
     /**

@@ -32,15 +32,15 @@ class UserPolicy
 
     /**
      * Determine if the user can view a specific user.
-     * Admin can view anyone, users can view their own profile.
+     * Admin can view any user, users can view their own profile.
+     * TenantAdmin can only view users from their own tenant.
      */
     public function view(User $user, User $targetUser): bool
     {
-        if ($this->hasPerm($user, 'users.view', 'users.manage')) {
-            return true;
-        }
-
-        return $user->id === $targetUser->id;
+        if ($user->id === $targetUser->id) { return true; }
+        if (!$this->hasPerm($user, 'users.view', 'users.manage')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
     }
 
     /**
@@ -54,28 +54,28 @@ class UserPolicy
 
     /**
      * Determine if the user can update a user.
-     * Admin can update anyone, users can update their own profile.
+     * Admin can update any user, users can update their own profile.
+     * TenantAdmin can only update users from their own tenant.
      */
     public function update(User $user, User $targetUser): bool
     {
-        if ($this->hasPerm($user, 'users.manage')) {
-            return true;
-        }
-
-        return $user->id === $targetUser->id;
+        if ($user->id === $targetUser->id) { return true; }
+        if (!$this->hasPerm($user, 'users.manage')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
     }
 
     /**
      * Determine if the user can delete a user.
-     * Only admins with users.delete permission, never themselves.
+     * Only Admins can delete users, and they cannot delete themselves.
+     * TenantAdmin can only delete users from their own tenant.
      */
     public function delete(User $user, User $targetUser): bool
     {
-        if ($user->id === $targetUser->id) {
-            return false;
-        }
-
-        return $this->hasPerm($user, 'users.delete');
+        if ($user->id === $targetUser->id) { return false; }
+        if (!$this->hasPerm($user, 'users.delete')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
     }
 
     /**
@@ -83,6 +83,8 @@ class UserPolicy
      */
     public function restore(User $user, User $targetUser): bool
     {
-        return $this->hasPerm($user, 'users.restore', 'users.manage');
+        if (!$this->hasPerm($user, 'users.restore', 'users.manage')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
     }
 }

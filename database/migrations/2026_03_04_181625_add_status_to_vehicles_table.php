@@ -11,9 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!Schema::hasTable('vehicles')) {
+            return;
+        }
+
         Schema::table('vehicles', function (Blueprint $table) {
-            $table->string('status')->default('available')->after('model');
-            $table->string('type')->default('electric')->after('status');
+            if (!Schema::hasColumn('vehicles', 'status')) {
+                $table->string('status')->default('available')->after('model');
+            }
+            if (!Schema::hasColumn('vehicles', 'type')) {
+                $table->string('type')->default('electric')->after('status');
+            }
         });
     }
 
@@ -22,8 +30,21 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (!Schema::hasTable('vehicles')) {
+            return;
+        }
+
         Schema::table('vehicles', function (Blueprint $table) {
-            $table->dropColumn(['status', 'type']);
+            $drop = [];
+            if (Schema::hasColumn('vehicles', 'status')) {
+                $drop[] = 'status';
+            }
+            if (Schema::hasColumn('vehicles', 'type')) {
+                $drop[] = 'type';
+            }
+            if ($drop !== []) {
+                $table->dropColumn($drop);
+            }
         });
     }
 };

@@ -10,11 +10,10 @@ class RolePolicy
     /**
      * System roles that cannot be modified or deleted.
      */
-    private const PROTECTED_ROLES = ['Admin', 'Client', 'Maintenance'];
+    private const PROTECTED_ROLES = ['SuperAdmin', 'TenantAdmin', 'Client', 'Maintenance'];
 
     /**
-     * Safely checks a permission, returning false instead of throwing
-     * PermissionDoesNotExist if the permission is not yet seeded.
+     * Safely checks a permission, returning false instead of throwing.
      */
     private function hasPerm(User $user, string ...$perms): bool
     {
@@ -25,41 +24,66 @@ class RolePolicy
         }
     }
 
-    /** List roles — requires roles.view or roles.manage. */
     public function viewAny(User $user): bool
     {
         return $this->hasPerm($user, 'roles.view', 'roles.manage');
     }
 
-    /** View a single role — requires roles.view or roles.manage. */
     public function view(User $user, Role $role): bool
     {
-        return $this->hasPerm($user, 'roles.view', 'roles.manage');
+        if (!$this->hasPerm($user, 'roles.view', 'roles.manage')) {
+            return false;
+        }
+
+        if (!$user->isSuperAdmin()) {
+            if (strtolower($role->name) === 'superadmin') {
+                return false;
+            }
+
+            if ($role->tenant_id !== null && $role->tenant_id !== $user->tenant_id) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
-    /** Create role — requires roles.manage. */
     public function create(User $user): bool
     {
         return $this->hasPerm($user, 'roles.manage');
     }
 
-    /** Update role — requires roles.manage; system roles are protected. */
     public function update(User $user, Role $role): bool
     {
-        if (in_array($role->name, self::PROTECTED_ROLES)) {
+        if (in_array($role->name, self::PROTECTED_ROLES, true)) {
             return false;
         }
 
-        return $this->hasPerm($user, 'roles.manage');
+        if (!$this->hasPerm($user, 'roles.manage')) {
+            return false;
+        }
+
+        if (!$user->isSuperAdmin() && $role->tenant_id !== $user->tenant_id) {
+            return false;
+        }
+
+        return true;
     }
 
-    /** Delete role — requires roles.delete; system roles are protected. */
     public function delete(User $user, Role $role): bool
     {
-        if (in_array($role->name, self::PROTECTED_ROLES)) {
+        if (in_array($role->name, self::PROTECTED_ROLES, true)) {
             return false;
         }
 
-        return $this->hasPerm($user, 'roles.delete');
+        if (!$this->hasPerm($user, 'roles.delete')) {
+            return false;
+        }
+
+        if (!$user->isSuperAdmin() && $role->tenant_id !== $user->tenant_id) {
+            return false;
+        }
+
+        return true;
     }
 }

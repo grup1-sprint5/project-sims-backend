@@ -18,21 +18,13 @@ class VehiclePolicy
 
     /**
      * Determine if the user can view a specific vehicle.
-     * Must belong to the same tenant (or be an admin without tenant).
+     * TenantAdmin can only view vehicles from their own tenant.
      */
     public function view(User $user, Vehicle $vehicle): bool
     {
-        if (!$user->hasPermissionTo('vehicles.view')) {
-            return false;
-        }
-
-        // Super admin (no tenant) can view all
-        if ($user->tenant_id === null) {
-            return true;
-        }
-
-        // User can only view vehicles from their tenant
-        return $vehicle->tenant_id === $user->tenant_id;
+        if (!$user->hasPermissionTo('vehicles.view')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $vehicle->tenant_id === null || $vehicle->tenant_id === $user->tenant_id;
     }
 
     /**
@@ -46,39 +38,23 @@ class VehiclePolicy
 
     /**
      * Determine if the user can update a vehicle.
-     * Only users with 'vehicles.manage' permission from the same tenant.
+     * TenantAdmin can only update vehicles from their own tenant.
      */
     public function update(User $user, Vehicle $vehicle): bool
     {
-        if (!$user->hasPermissionTo('vehicles.manage')) {
-            return false;
-        }
-
-        // Super admin (no tenant) can update all
-        if ($user->tenant_id === null) {
-            return true;
-        }
-
-        // User can only update vehicles from their tenant
-        return $vehicle->tenant_id === $user->tenant_id;
+        if (!$user->hasPermissionTo('vehicles.manage')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $vehicle->tenant_id === null || $vehicle->tenant_id === $user->tenant_id;
     }
 
     /**
      * Determine if the user can delete a vehicle.
-     * Only admins with 'vehicles.delete' permission from the same tenant.
+     * TenantAdmin can only delete vehicles from their own tenant.
      */
     public function delete(User $user, Vehicle $vehicle): bool
     {
-        if (!$user->hasPermissionTo('vehicles.delete')) {
-            return false;
-        }
-
-        // Super admin (no tenant) can delete all
-        if ($user->tenant_id === null) {
-            return true;
-        }
-
-        // User can only delete vehicles from their tenant
-        return $vehicle->tenant_id === $user->tenant_id;
+        if (!$user->hasPermissionTo('vehicles.delete')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $vehicle->tenant_id === null || $vehicle->tenant_id === $user->tenant_id;
     }
 }

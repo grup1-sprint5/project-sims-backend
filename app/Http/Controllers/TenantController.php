@@ -25,13 +25,23 @@ class TenantController extends Controller
     {
         $this->authorize('viewAny', Tenant::class);
 
-        $query = Tenant::withCount(['users', 'vehicles']);
+        $user = auth()->user();
+
+        // TenantAdmin can only see their own tenant
+        if (!$user->isSuperAdmin() && $user->tenant_id) {
+            $tenant = Tenant::find($user->tenant_id);
+            return response()->json([
+                'data' => $tenant ? [new TenantResource($tenant)] : [],
+            ]);
+        }
+
+        $query = Tenant::query();
 
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'ILIKE', "%{$search}%")
-                  ->orWhere('slug', 'ILIKE', "%{$search}%")
+                  ->orWhere('id', 'ILIKE', "%{$search}%")
                   ->orWhere('email', 'ILIKE', "%{$search}%")
                   ->orWhere('tax_id', 'ILIKE', "%{$search}%");
             });
@@ -41,11 +51,11 @@ class TenantController extends Controller
             $query->where('active', filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN));
         }
 
-        $sortField = in_array($request->input('sort'), ['name', 'slug', 'created_at']) 
-            ? $request->input('sort') 
+        $sortField = in_array($request->input('sort'), ['name', 'id', 'created_at'])
+            ? $request->input('sort')
             : 'created_at';
-        $sortDir = in_array($request->input('dir'), ['asc', 'desc']) 
-            ? $request->input('dir') 
+        $sortDir = in_array($request->input('dir'), ['asc', 'desc'])
+            ? $request->input('dir')
             : 'desc';
 
         $tenants = $query->orderBy($sortField, $sortDir)
@@ -56,12 +66,19 @@ class TenantController extends Controller
 
     /**
      * Crear un nuevo tenant.
+     * The `slug` from the request becomes the tenant's primary key (`id`).
+     * stancl/tenancy automatically creates the PostgreSQL schema and runs
+     * tenant migrations when the Tenant model is saved.
      */
     public function store(StoreTenantRequest $request): JsonResponse
     {
         $this->authorize('create', Tenant::class);
 
-        $tenant = Tenant::create($request->validated());
+        $data       = $request->validated();
+        $data['id'] = $data['slug'];  // slug is the string primary key
+        unset($data['slug']);
+
+        $tenant = Tenant::create($data);
 
         return response()->json([
             'message' => 'Tenant creado correctamente',
@@ -75,8 +92,6 @@ class TenantController extends Controller
     public function show(Tenant $tenant): JsonResponse
     {
         $this->authorize('view', $tenant);
-
-        $tenant->loadCount(['users', 'vehicles']);
 
         return response()->json([
             'data' => new TenantResource($tenant),
