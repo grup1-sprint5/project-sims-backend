@@ -2,13 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tenant;
 use App\Models\Vehicle;
 use App\Http\Requests\Vehicle\StoreVehicleRequest;
 use App\Http\Requests\Vehicle\UpdateVehicleRequest;
 use App\Services\VehicleLocationService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 
 class VehicleController extends Controller
@@ -31,15 +29,14 @@ class VehicleController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $user = auth()->user();
-        $currentTenant = function_exists('tenant') ? tenant()?->id : null;
+        $user = $request->user();
+        
+        $query = Vehicle::query();
 
-        // SuperAdmin accessing from "central" tenant sees all vehicles from all other tenants
-        if ($user && $user->isSuperAdmin() && $currentTenant === 'central') {
-            return $this->indexForSuperAdmin($request);
+        // Filter by tenant: Super admins (no tenant) see all, others see only their tenant
+        if ($user->tenant_id !== null) {
+            $query->where('tenant_id', $user->tenant_id);
         }
-
-        $query = Vehicle::with('tenant');
 
         // Búsqueda general por license_plate, brand o model
         if ($request->filled('search')) {
@@ -68,134 +65,34 @@ class VehicleController extends Controller
             $query->where('active', filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN));
         }
 
-        $vehicles = $query->orderBy('created_at', 'desc')
-                          ->paginate($request->input('per_page', 15));
+        $vehicles = $query
+            ->withCount([
+                'reservations as active_reservations_count' => function ($q) {
+                    $q->whereIn('status', ['pending', 'active', 'confirmed']);
+                }
+            ])
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->input('per_page', 15));
 
-        try {
-            $locations = $this->locationService->getLocations();
-        } catch (\Exception $e) {
-            $locations = [];
-        }
+        $locations = $this->locationService->getLocations();
 
         // Attach latitude/longitude (and mongo_active) from Mongo to each vehicle in the paginated collection
         $vehicles->getCollection()->transform(function ($vehicle) use ($locations) {
             $location = $locations[$vehicle->license_plate] ?? null;
+            $hasActiveReservation = ((int) ($vehicle->active_reservations_count ?? 0)) > 0;
+            $mongoRunning = $hasActiveReservation && (($location['active'] ?? false) === true);
+            $effectiveStatus = $mongoRunning ? 'running' : ($hasActiveReservation ? 'occupied' : 'available');
+
             // Use setAttribute so the values are included when the Eloquent models are serialized to JSON
             $vehicle->setAttribute('latitude', $location['latitude'] ?? null);
             $vehicle->setAttribute('longitude', $location['longitude'] ?? null);
-            $vehicle->setAttribute('mongo_active', $location['active'] ?? null);
+            $vehicle->setAttribute('mongo_active', $mongoRunning);
+            $vehicle->setAttribute('postgres_active', $hasActiveReservation);
+            $vehicle->setAttribute('status', $effectiveStatus);
             return $vehicle;
         });
 
         return response()->json($vehicles);
-    }
-
-    private function indexForSuperAdmin(Request $request): JsonResponse
-    {
-        $originalTenant = function_exists('tenant') ? tenant() : null;
-        $rows = collect();
-
-        // Get all active tenants EXCEPT the "central" tenant (which is for SuperAdmin)
-        $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
-
-        foreach ($tenants as $tenant) {
-            tenancy()->initialize($tenant);
-
-            $query = Vehicle::query();
-
-            if ($request->filled('search')) {
-                $search = $request->input('search');
-                $query->where(function ($q) use ($search) {
-                    $q->where('license_plate', 'ILIKE', "%{$search}%")
-                        ->orWhere('brand', 'ILIKE', "%{$search}%")
-                        ->orWhere('model', 'ILIKE', "%{$search}%");
-                });
-            }
-
-            if ($request->filled('license_plate')) {
-                $query->where('license_plate', 'ILIKE', "%{$request->input('license_plate')}%");
-            }
-
-            if ($request->filled('brand')) {
-                $query->where('brand', 'ILIKE', "%{$request->input('brand')}%");
-            }
-
-            if ($request->filled('model')) {
-                $query->where('model', 'ILIKE', "%{$request->input('model')}%");
-            }
-
-            if ($request->has('active')) {
-                $query->where('active', filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN));
-            }
-
-            $tenantVehicles = $query->orderBy('created_at', 'desc')->get();
-
-            try {
-                $locations = $this->locationService->getLocations();
-            } catch (\Exception $e) {
-                $locations = [];
-            }
-
-            $mapped = $tenantVehicles->map(function ($vehicle) use ($locations, $tenant) {
-                $location = $locations[$vehicle->license_plate] ?? null;
-
-                return [
-                    'id' => $vehicle->id,
-                    'tenant_id' => $tenant->id,
-                    'tenant' => [
-                        'id' => $tenant->id,
-                        'name' => $tenant->name,
-                    ],
-                    'license_plate' => $vehicle->license_plate,
-                    'brand' => $vehicle->brand,
-                    'model' => $vehicle->model,
-                    'status' => $vehicle->status,
-                    'type' => $vehicle->type,
-                    'active' => (bool) $vehicle->active,
-                    'price_per_minute' => $vehicle->price_per_minute,
-                    'image_url' => $vehicle->image_url,
-                    'battery_level' => $vehicle->battery_level,
-                    'latitude' => $location['latitude'] ?? null,
-                    'longitude' => $location['longitude'] ?? null,
-                    'mongo_active' => $location['active'] ?? null,
-                    'created_at' => $vehicle->created_at?->toIso8601String(),
-                    'updated_at' => $vehicle->updated_at?->toIso8601String(),
-                ];
-            });
-
-            $rows = $rows->concat($mapped);
-        }
-
-        if ($originalTenant) {
-            tenancy()->initialize($originalTenant);
-        } else {
-            tenancy()->end();
-        }
-
-        if ($tenantFilter = $request->input('tenant_id')) {
-            $rows = $rows->where('tenant_id', $tenantFilter)->values();
-        }
-
-        $rows = $rows->sortByDesc('created_at')->values();
-
-        $perPage = (int) $request->input('per_page', 15);
-        $perPage = max(1, min($perPage, 100));
-        $page = max((int) $request->input('page', 1), 1);
-        $total = $rows->count();
-        $slice = $rows->slice(($page - 1) * $perPage, $perPage)->values();
-
-        $paginator = new LengthAwarePaginator(
-            $slice,
-            $total,
-            $perPage,
-            $page,
-            [
-                'path' => $request->url(),
-                'query' => $request->query(),
-            ]
-        );
-
-        return response()->json($paginator);
     }
 
     /**
@@ -206,6 +103,9 @@ class VehicleController extends Controller
         $this->authorize('create', Vehicle::class);
 
         $data = $request->validated();
+        
+        // Assign tenant_id from authenticated user
+        $data['tenant_id'] = $request->user()->tenant_id;
 
         $vehicle = Vehicle::create($data);
 
@@ -263,45 +163,60 @@ class VehicleController extends Controller
     {
         $this->authorize('viewAny', Vehicle::class);
 
-        $user = auth()->user();
-        $query = Vehicle::query();
-        $vehicles = $query->get();
+        $vehicles = Vehicle::query()
+            ->withCount([
+                'reservations as active_reservations_count' => function ($q) {
+                    $q->whereIn('status', ['pending', 'active', 'confirmed']);
+                }
+            ])
+            ->get();
         $locations = $this->locationService->getLocations();
 
         $result = $vehicles->map(function ($vehicle) use ($locations) {
             $location = $locations[$vehicle->license_plate] ?? null;
+            $hasActiveReservation = ((int) ($vehicle->active_reservations_count ?? 0)) > 0;
+            $mongoRunning = $hasActiveReservation && (($location['active'] ?? false) === true);
+            $effectiveStatus = $mongoRunning ? 'running' : ($hasActiveReservation ? 'occupied' : 'available');
 
             return [
                 'id' => $vehicle->id,
                 'plate' => $vehicle->license_plate,
                 'brand' => $vehicle->brand,
                 'model' => $vehicle->model,
-                // Postgres-side availability: consider 'active' column in vehicles table as availability flag
-                'postgres_active' => (bool) $vehicle->active,
-                // Mongo active flag if present
-                'mongo_active' => $location['active'] ?? null,
+                'status' => $effectiveStatus,
+                'postgres_active' => $hasActiveReservation,
+                'mongo_active' => $mongoRunning,
                 'latitude' => $location['latitude'] ?? null,
                 'longitude' => $location['longitude'] ?? null,
             ];
         })
-        // Keep only those vehicles that have coordinates and are NOT active in Postgres (available to reserve: postgres_active === false)
-        ->filter(fn($v) => $v['latitude'] !== null && $v['longitude'] !== null && ($v['postgres_active'] === false))->values();
+        // Keep only those vehicles that have coordinates
+        ->filter(fn($v) => $v['latitude'] !== null && $v['longitude'] !== null)->values();
 
         return response()->json($result);
     }
 
     /**
-     * Obtener veh edculos para admin (incluye inactivos y datos extra)
+     * Obtener vehedculos para admin (incluye inactivos y datos extra)
      */
     public function adminMap(): JsonResponse
     {
         $this->authorize('viewAny', Vehicle::class);
 
-        $vehicles = Vehicle::all();
+        $vehicles = Vehicle::query()
+            ->withCount([
+                'reservations as active_reservations_count' => function ($q) {
+                    $q->whereIn('status', ['pending', 'active', 'confirmed']);
+                }
+            ])
+            ->get();
         $locations = $this->locationService->getLocations();
 
         $result = $vehicles->map(function ($vehicle) use ($locations) {
             $location = $locations[$vehicle->license_plate] ?? null;
+            $hasActiveReservation = ((int) ($vehicle->active_reservations_count ?? 0)) > 0;
+            $mongoRunning = $hasActiveReservation && (($location['active'] ?? false) === true);
+            $effectiveStatus = $mongoRunning ? 'running' : ($hasActiveReservation ? 'occupied' : 'available');
 
             return [
                 'id' => $vehicle->id,
@@ -310,12 +225,9 @@ class VehicleController extends Controller
                 'model' => $vehicle->model,
                 'latitude' => $location['latitude'] ?? null,
                 'longitude' => $location['longitude'] ?? null,
-                // For admin include exact mongo active value (null if missing)
-                'mongo_active' => $location['active'] ?? null,
-                // include postgres_active as well
-                'postgres_active' => (bool) $vehicle->active,
-                // status: 'active' only if mongo says active === true, otherwise 'inactive'
-                'status' => isset($location['active']) ? ($location['active'] ? 'active' : 'inactive') : 'inactive',
+                'mongo_active' => $mongoRunning,
+                'postgres_active' => $hasActiveReservation,
+                'status' => $effectiveStatus,
             ];
         })->values();
 

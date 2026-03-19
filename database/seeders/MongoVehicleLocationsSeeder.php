@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Vehicle;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -9,33 +10,44 @@ class MongoVehicleLocationsSeeder extends Seeder
 {
     public function run()
     {
-        $locations = [
-            [
-                'license_plate' => 'ABC123',
-                'latitude' => 40.7361,
-                'longitude' => 0.5170,
-                'active' => true,
-            ],
-            [
-                'license_plate' => 'DEF456',
-                'latitude' => 40.7370,
-                'longitude' => 0.5185,
-                'active' => false,
-            ],
-            [
-                'license_plate' => 'GHI789',
-                'latitude' => 40.7350,
-                'longitude' => 0.5150,
-                'active' => true,
-            ],
-        ];
-
-        // Inserta/actualiza por license_plate
         $connection = DB::connection('mongodb');
-        foreach ($locations as $loc) {
+
+        $vehicles = Vehicle::query()
+            ->select(['id', 'license_plate'])
+            ->orderBy('id')
+            ->get();
+
+        if ($vehicles->isEmpty()) {
+            return;
+        }
+
+        $baseLat = 40.7095;
+        $baseLng = 0.5795;
+
+        foreach ($vehicles as $index => $vehicle) {
+            $existing = $connection->table('vehicle_locations')
+                ->where('license_plate', $vehicle->license_plate)
+                ->orWhere('licensePlate', $vehicle->license_plate)
+                ->first();
+
+            $latOffset = (($index % 5) - 2) * 0.0012;
+            $lngOffset = (int) floor($index / 5) * 0.0015;
+
+            $location = [
+                'vehicle_id' => $vehicle->id,
+                'license_plate' => $vehicle->license_plate,
+                'latitude' => isset($existing->latitude)
+                    ? (float) $existing->latitude
+                    : round($baseLat + $latOffset, 6),
+                'longitude' => isset($existing->longitude)
+                    ? (float) $existing->longitude
+                    : round($baseLng + $lngOffset, 6),
+                'active' => isset($existing->active) ? (bool) $existing->active : false,
+            ];
+
             $connection->table('vehicle_locations')->updateOrInsert(
-                ['license_plate' => $loc['license_plate']],
-                $loc
+                ['license_plate' => $vehicle->license_plate],
+                $location
             );
         }
     }

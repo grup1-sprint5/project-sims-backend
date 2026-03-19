@@ -296,7 +296,6 @@ class ReservationController extends Controller
      * Calcular preu segons regles de pricing:
      * - 0,10 € per minut
      * - màxim 5 € per hora
-     * - màxim 45 € per dia (24h)
      */
     private function calculateReservationPrice(Carbon $start, Carbon $end): array
     {
@@ -309,42 +308,24 @@ class ReservationController extends Controller
         $remainingMinutes = $totalMinutes % 60;
         
         $maxPricePerHour = 5.00;
-        $priceForFullHours = $fullHours * $maxPricePerHour;
+
+        // Per cada hora completa: cobrar el mínim entre 60*ppm i el topall horari
+        $hourPrice = min(60 * $pricePerMinute, $maxPricePerHour);
+        $priceForFullHours = $fullHours * $hourPrice;
         $priceForRemainingMinutes = min($remainingMinutes * $pricePerMinute, $maxPricePerHour);
-        
+
         $priceWithHourlyLimit = $priceForFullHours + $priceForRemainingMinutes;
-        
-        $fullDays = floor($totalMinutes / 1440);
-        $minutesAfterDays = $totalMinutes % 1440;
-        $maxPricePerDay = 45.00;
-        
-        if ($fullDays > 0) {
-            $priceForFullDays = $fullDays * $maxPricePerDay;
-            
-            // Per la part restant després dels dies complets, aplicar topall horari
-            $hoursRemaining = floor($minutesAfterDays / 60);
-            $minutesRemaining = $minutesAfterDays % 60;
-            
-            // Preu amb topall horari aplicat a les hores restants
-            $priceForRemainingHours = $hoursRemaining * $maxPricePerHour;
-            $priceForRemainingMinutes = $minutesRemaining * $pricePerMinute;
-            $priceForRemaining = $priceForRemainingHours + $priceForRemainingMinutes;
-            
-            $finalPrice = $priceForFullDays + $priceForRemaining;
-        } else {
-            // Si no hi ha dies complets, aplicar el mínim entre preu amb topall horari i topall diari
-            $finalPrice = min($priceWithHourlyLimit, $maxPricePerDay);
-        }
+
+        // Mai cobrar més que el preu base
+        $finalPrice = min($basePrice, $priceWithHourlyLimit);
         
         return [
             'total_minutes' => $totalMinutes,
             'hours' => round($totalMinutes / 60, 2),
-            'days' => round($totalMinutes / 1440, 2),
             'base_price' => round($basePrice, 2),
             'final_price' => round($finalPrice, 2),
             'price_per_minute' => $pricePerMinute,
             'max_per_hour' => $maxPricePerHour,
-            'max_per_day' => $maxPricePerDay,
         ];
     }
 }

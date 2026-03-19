@@ -102,6 +102,7 @@ class DatabaseSeeder extends Seeder
         // 7. Crear datos de prueba
         $this->call([
             TestDataSeeder::class,
+            MongoVehicleLocationsSeeder::class,
         ]);
     }
 }
