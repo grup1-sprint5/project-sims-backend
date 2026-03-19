@@ -35,11 +35,45 @@ docker compose exec app php artisan key:generate --force
 docker compose exec app php artisan migrate --force
 ```
 
-7) (Optional) Seed database with test data:
+7) Run tenant migrations (required for business tables like users, vehicles, tickets, reservations):
+
+```bash
+docker compose exec app php artisan tenants:migrate --force --no-interaction
+```
+
+8) Seed tenant data (required if you want demo data in map/reservations/tickets):
+
+```bash
+docker compose exec app php artisan tenants:seed --class="Database\\Seeders\\DatabaseSeeder" --force --no-interaction
+```
+
+9) (Optional) Check tenant data counts:
+
+```bash
+docker compose exec app php artisan tinker --execute='foreach (App\\Models\\Tenant::all() as $t) { tenancy()->initialize($t); dump($t->id, ["vehicles"=>App\\Models\\Vehicle::count(), "tickets"=>App\\Models\\Ticket::count(), "reservations"=>App\\Models\\Reservation::count()]); } tenancy()->end();'
+```
+
+10) (Optional) If you also need central seeders:
 
 ```bash
 docker compose exec app php artisan db:seed
 ```
+
+## Quick start after pull from `develop`
+
+If after pulling `develop` you see no vehicles/tickets/reservations, run:
+
+```bash
+docker compose exec app php artisan migrate --force
+docker compose exec app php artisan tenants:migrate --force --no-interaction
+docker compose exec app php artisan tenants:seed --class="Database\\Seeders\\DatabaseSeeder" --force --no-interaction
+```
+
+Then login with tenant organization + credentials, for example:
+
+- organization: `sims-corp`
+- email: `client@test.com`
+- password: `password`
 
 ## Scheduler (Cancel·lació automàtica de reserves)
 
@@ -63,7 +97,9 @@ Això executarà el command `reservations:cancel-expired` cada minut.
 ### Refresh migrations
 This will delete all the DB and exec all the migrations again:
 ```bash
-docker compose exec app php artisan migrate:refresh --seed;
+docker compose exec app php artisan migrate:fresh --force
+docker compose exec app php artisan tenants:migrate-fresh --force --no-interaction
+docker compose exec app php artisan tenants:seed --class="Database\\Seeders\\DatabaseSeeder" --force --no-interaction
 ```
 
 ## FOR TEST ONLY
