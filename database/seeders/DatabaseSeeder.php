@@ -25,6 +25,13 @@ class DatabaseSeeder extends Seeder
             TenantsSeeder::class,
         ]);
 
+        $simsTenant = \App\Models\Tenant::find('sims-corp');
+        $ecoTenant = \App\Models\Tenant::find('ecomove');
+
+        if (!$simsTenant || !$ecoTenant) {
+            throw new \RuntimeException('Required tenants not found after TenantsSeeder.');
+        }
+
         $password = Hash::make('password'); // Contraseña común para test
 
         // 2. Crear ADMIN (El Jefe)
@@ -35,6 +42,7 @@ class DatabaseSeeder extends Seeder
                 'username' => 'admin',
                 'password' => $password,
                 'active' => true,
+                'tenant_id' => $simsTenant->id,
             ]
         );
         $admin->assignRole('SuperAdmin');
@@ -47,6 +55,7 @@ class DatabaseSeeder extends Seeder
                 'username' => 'client',
                 'password' => $password,
                 'active' => true,
+                'tenant_id' => $simsTenant->id,
             ]
         );
         $client->assignRole('Client');
@@ -59,12 +68,12 @@ class DatabaseSeeder extends Seeder
                 'username' => 'maintenance',
                 'password' => $password,
                 'active' => true,
+                'tenant_id' => $ecoTenant->id,
             ]
         );
         $maintenance->assignRole('Maintenance');
 
         // 5. Crear TENANT ADMIN para SIMS Corp
-        $simsTenant = \App\Models\Tenant::where('id', 'sims-corp')->orWhere('slug', 'sims-corp')->first();
         $tenantAdmin1 = User::firstOrCreate(
             ['email' => 'admin@simscorp.com'],
             [
@@ -72,13 +81,12 @@ class DatabaseSeeder extends Seeder
                 'username' => 'admin_sims',
                 'password' => $password,
                 'active' => true,
-                'tenant_id' => $simsTenant?->id,
+                'tenant_id' => $simsTenant->id,
             ]
         );
         $tenantAdmin1->assignRole('TenantAdmin');
 
         // 6. Crear TENANT ADMIN para EcoMove SL
-        $ecoTenant = \App\Models\Tenant::where('id', 'ecomove')->orWhere('slug', 'ecomove')->first();
         $tenantAdmin2 = User::firstOrCreate(
             ['email' => 'admin@ecomove.es'],
             [
@@ -86,7 +94,7 @@ class DatabaseSeeder extends Seeder
                 'username' => 'admin_ecomove',
                 'password' => $password,
                 'active' => true,
-                'tenant_id' => $ecoTenant?->id,
+                'tenant_id' => $ecoTenant->id,
             ]
         );
         $tenantAdmin2->assignRole('TenantAdmin');

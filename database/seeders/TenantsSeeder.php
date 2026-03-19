@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Tenant;
 use Illuminate\Database\Seeder;
+use Stancl\Tenancy\Database\Models\Domain;
 
 class TenantsSeeder extends Seeder
 {
@@ -31,15 +32,6 @@ class TenantsSeeder extends Seeder
                 'address' => 'Av. Diagonal 200, Barcelona',
                 'active'  => true,
             ],
-            [
-                'name'    => 'UrbanRide',
-                'slug'    => 'urbanride',
-                'tax_id'  => null,
-                'email'   => 'hello@urbanride.io',
-                'phone'   => null,
-                'address' => null,
-                'active'  => false,
-            ],
         ];
 
         foreach ($tenants as $tenant) {
@@ -48,6 +40,12 @@ class TenantsSeeder extends Seeder
             unset($payload['slug']);
 
             Tenant::firstOrCreate(['id' => $payload['id']], $payload);
+
+            Domain::firstOrCreate([
+                'domain' => $tenant['slug'] . '.localhost',
+            ], [
+                'tenant_id' => $payload['id'],
+            ]);
         }
     }
 }

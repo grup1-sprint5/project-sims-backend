@@ -9,6 +9,7 @@ use App\Http\Middleware\CheckTenantActive;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AuthExchangeController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\TicketController;
@@ -34,6 +35,7 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
     ->group(function () {
 
         Route::post('/login', [AuthController::class, 'login'])->name('tenant.login');
+        Route::post('/auth/exchange-token', [AuthExchangeController::class, 'exchange'])->name('tenant.exchange');
 
         Route::middleware('auth.tenant-token')->group(function () {
 

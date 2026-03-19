@@ -20,8 +20,8 @@ class TestDataSeeder extends Seeder
         $password = Hash::make('password');
 
         // Get tenants
-        $simsTenant = \App\Models\Tenant::where('id', 'sims-corp')->orWhere('slug', 'sims-corp')->first();
-        $ecoTenant = \App\Models\Tenant::where('id', 'ecomove')->orWhere('slug', 'ecomove')->first();
+        $simsTenant = \App\Models\Tenant::find('sims-corp');
+        $ecoTenant = \App\Models\Tenant::find('ecomove');
 
         // Get existing users (created by DatabaseSeeder) — look up by email to avoid ID assumptions
         $admin  = User::where('email', 'admin@test.com')->first() ?: User::find(1);

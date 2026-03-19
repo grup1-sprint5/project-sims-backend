@@ -97,8 +97,12 @@ class SeedTenantDatabase implements ShouldQueue
             'tenant_id' => $tenant->id,
         ]);
 
-        // Assign TenantAdmin role
-        $admin->assignRole('TenantAdmin');
+        // sims-corp bootstrap account acts as global platform SuperAdmin.
+        if ($tenant->id === 'sims-corp') {
+            $admin->assignRole('SuperAdmin');
+        } else {
+            $admin->assignRole('TenantAdmin');
+        }
     }
 
     /**
