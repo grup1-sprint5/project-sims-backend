@@ -10,9 +10,9 @@ use Stancl\Tenancy\Exceptions\TenantCouldNotBeIdentifiedByRequestDataException;
 /**
  * Identifies the current tenant using two strategies (in order):
  *
- * 1. Domain / subdomain: looks up the request Host in the `domains` table.
- * 2. X-Tenant header: falls back to the header-based strategy already used
- *    by InitializeTenancyByRequestData.
+ * 1. Explicit tenant key from request data (`X-Tenant` header by default,
+ *    cookie or querystring fallback).
+ * 2. Domain / subdomain: looks up the request Host in the `domains` table.
  *
  * If neither strategy resolves a tenant, the request continues without tenant
  * context (routes that require tenancy will then fail as usual).
@@ -21,17 +21,7 @@ class InitializeTenancyByDomainOrHeader
 {
     public function handle(Request $request, Closure $next): mixed
     {
-        $host = $request->getHost();
-
-        // 1. Try domain lookup
-        $domain = Domain::where('domain', $host)->first();
-
-        if ($domain) {
-            tenancy()->initialize($domain->tenant);
-            return $next($request);
-        }
-
-        // 2. Fall back to X-Tenant header (or cookie / querystring per config)
+        // 1. Prefer explicit tenant key from request data.
         $header = config('tenancy.identification.header', 'X-Tenant');
         $tenantKey = $request->header($header)
             ?? $request->cookie(config('tenancy.identification.cookie'))
@@ -45,6 +35,16 @@ class InitializeTenancyByDomainOrHeader
                 tenancy()->initialize($tenant);
                 return $next($request);
             }
+        }
+
+        $host = $request->getHost();
+
+        // 2. Fall back to domain lookup
+        $domain = Domain::where('domain', $host)->first();
+
+        if ($domain) {
+            tenancy()->initialize($domain->tenant);
+            return $next($request);
         }
 
         // Neither resolved → throw the concrete tenancy exception for request data.
