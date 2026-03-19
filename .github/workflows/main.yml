@@ -20,8 +20,13 @@ jobs:
           port: 22
           script: |
             cd /var/www/sims-back
-            git config --global --add safe.directory /var/www/sims-back
             git fetch origin develop
             git reset --hard origin/develop
+            
+            # Reconstruir y levantar
             docker compose up -d --build
-            docker compose exec -T api php artisan migrate --force
+            
+            # Limpiar y Migrar (usando el nombre 'app' del YAML anterior)
+            docker compose exec -T app php artisan migrate --force
+            docker compose exec -T app php artisan config:cache
+            docker compose exec -T app php artisan route:cache
