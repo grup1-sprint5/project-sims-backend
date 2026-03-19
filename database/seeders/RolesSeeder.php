@@ -14,12 +14,27 @@ class RolesSeeder extends Seeder
     public function run(): void
     {
         // Create core roles
-        $adminRole = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
+        $superAdminRole = Role::firstOrCreate(['name' => 'SuperAdmin', 'guard_name' => 'web']);
+        $tenantAdminRole = Role::firstOrCreate(['name' => 'TenantAdmin', 'guard_name' => 'web']);
         $clientRole = Role::firstOrCreate(['name' => 'Client', 'guard_name' => 'web']);
         $maintenanceRole = Role::firstOrCreate(['name' => 'Maintenance', 'guard_name' => 'web']);
 
-        // Admin: Full access to all permissions
-        $adminRole->syncPermissions(Permission::all());
+        // SuperAdmin: Full access to all permissions (cross-tenant)
+        $superAdminRole->syncPermissions(Permission::all());
+
+        // TenantAdmin: Manage resources within own tenant
+        $tenantAdminRole->syncPermissions([
+            'users.view',
+            'users.manage',
+            'roles.view',
+            'vehicles.view',
+            'vehicles.manage',
+            'tickets.view',
+            'tickets.manage',
+            'reservations.view',
+            'reservations.manage',
+            'tenants.view',
+        ]);
 
         // Client: Limited permissions
         // Can view vehicles and manage own tickets/reservations

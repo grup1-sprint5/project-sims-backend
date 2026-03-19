@@ -11,10 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!Schema::hasTable('reservations')) {
+            return;
+        }
+
         Schema::table('reservations', function (Blueprint $table) {
-            $table->timestamp('scheduled_end')->nullable()->after('scheduled_start');
-            $table->decimal('total_price', 8, 2)->nullable()->after('cancellation_fee');
-            $table->foreignId('tenant_id')->nullable()->after('vehicle_id')->constrained()->onDelete('cascade');
+            if (!Schema::hasColumn('reservations', 'scheduled_end')) {
+                $table->timestamp('scheduled_end')->nullable()->after('scheduled_start');
+            }
+            if (!Schema::hasColumn('reservations', 'total_price')) {
+                $table->decimal('total_price', 8, 2)->nullable()->after('cancellation_fee');
+            }
         });
     }
 
@@ -23,9 +30,21 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (!Schema::hasTable('reservations')) {
+            return;
+        }
+
         Schema::table('reservations', function (Blueprint $table) {
-            $table->dropForeign(['tenant_id']);
-            $table->dropColumn(['scheduled_end', 'total_price', 'tenant_id']);
+            $drop = [];
+            if (Schema::hasColumn('reservations', 'scheduled_end')) {
+                $drop[] = 'scheduled_end';
+            }
+            if (Schema::hasColumn('reservations', 'total_price')) {
+                $drop[] = 'total_price';
+            }
+            if ($drop !== []) {
+                $table->dropColumn($drop);
+            }
         });
     }
 };

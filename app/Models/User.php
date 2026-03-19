@@ -10,11 +10,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use Spatie\Permission\Models\Role;
+use App\Models\Traits\BelongsToTenant;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens, SoftDeletes;
+    use HasFactory, Notifiable, HasApiTokens, SoftDeletes, BelongsToTenant;
     use HasRoles;
 
     public $guard_name = 'web';
@@ -43,7 +44,7 @@ class User extends Authenticatable
         'email',
         'password',
         'active',
-        'tenant_id',
+        'tenant_id',  // string slug, auto-assigned by BelongsToTenant
     ];
 
     /**
@@ -95,5 +96,21 @@ class User extends Authenticatable
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    /**
+     * Check if the user has the SuperAdmin role.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole('SuperAdmin');
+    }
+
+    /**
+     * Check if the user has the TenantAdmin role.
+     */
+    public function isTenantAdmin(): bool
+    {
+        return $this->hasRole('TenantAdmin');
     }
 }

@@ -10,7 +10,7 @@ class EnsureJordiAdminSeeder extends Seeder
 {
     public function run()
     {
-        $role = Role::firstOrCreate(['name' => 'Admin']);
+        $role = Role::firstOrCreate(['name' => 'SuperAdmin']);
 
         $user = User::firstOrCreate(
             ['email' => 'jordi@jordi.com'],
@@ -22,7 +22,7 @@ class EnsureJordiAdminSeeder extends Seeder
             ]
         );
 
-        if (!$user->hasRole('Admin')) {
+        if (!$user->hasRole('SuperAdmin')) {
             $user->assignRole($role);
         }
 

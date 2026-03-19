@@ -1,0 +1,97 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Tenant;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Stancl\Tenancy\Database\Models\Domain;
+
+class CentralAuthController extends Controller
+{
+    /**
+     * Authenticate from central domain and return tenant redirect metadata.
+     */
+    public function login(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'organization' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        $organization = strtolower(trim((string) $validated['organization']));
+
+        $tenant = Tenant::query()
+            ->where('id', $organization)
+            ->orWhere('name', 'ILIKE', $organization)
+            ->first();
+
+        if (!$tenant) {
+            throw ValidationException::withMessages([
+                'organization' => ['Organization not found.'],
+            ]);
+        }
+
+        if (!$tenant->active) {
+            return response()->json([
+                'message' => 'This organization is inactive.',
+            ], 403);
+        }
+
+        tenancy()->initialize($tenant);
+
+        try {
+            $user = User::query()->where('email', $validated['email'])->first();
+
+            if (!$user || !Hash::check($validated['password'], $user->password)) {
+                throw ValidationException::withMessages([
+                    'email' => ['Incorrect credentials.'],
+                ]);
+            }
+
+            if (!$user->active) {
+                return response()->json([
+                    'message' => 'User inactive.',
+                ], 403);
+            }
+
+            // Do not return the real API token in URL query params.
+            // Issue a short-lived one-time exchange token instead.
+            $exchangeToken = Str::random(96);
+            $exchangeTokenHash = hash('sha256', $exchangeToken);
+
+            DB::connection('pgsql')->table('login_exchange_tokens')->insert([
+                'token_hash' => $exchangeTokenHash,
+                'tenant_id' => (string) $tenant->id,
+                'user_id' => (int) $user->id,
+                'expires_at' => now()->addMinutes(3),
+                'used_at' => null,
+                'ip_address' => (string) $request->ip(),
+                'user_agent' => substr((string) ($request->userAgent() ?? ''), 0, 255),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Pick a canonical tenant domain if available.
+            $domain = Domain::query()->where('tenant_id', $tenant->id)->orderBy('id')->value('domain');
+            $tenantHost = $domain ?: ($tenant->id . '.localhost');
+
+            return response()->json([
+                'message' => 'Central login successful',
+                'exchange_token' => $exchangeToken,
+                'tenant_id' => (string) $tenant->id,
+                'tenant_host' => $tenantHost,
+                'user' => $user,
+            ]);
+        } finally {
+            tenancy()->end();
+        }
+    }
+}

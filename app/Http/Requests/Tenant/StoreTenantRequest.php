@@ -15,7 +15,7 @@ class StoreTenantRequest extends FormRequest
     {
         return [
             'name'    => ['required', 'string', 'max:255'],
-            'slug'    => ['required', 'string', 'max:255', 'unique:tenants,slug', 'alpha_dash'],
+            'slug'    => ['required', 'string', 'max:255', 'unique:tenants,id', 'alpha_dash'],
             'tax_id'  => ['nullable', 'string', 'max:50', 'unique:tenants,tax_id'],
             'email'   => ['nullable', 'email', 'max:255'],
             'phone'   => ['nullable', 'string', 'max:30'],

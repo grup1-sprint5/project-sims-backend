@@ -20,17 +20,14 @@ class ReservationPolicy
 
     /**
      * Determine if the user can view a specific reservation.
-     * Admins can view any reservation, users can only view their own.
+     * SuperAdmin can view any, TenantAdmin only their tenant's, users their own.
      */
     public function view(User $user, Reservation $reservation): bool
     {
-        // Admin can view any reservation
-        if ($user->hasPermissionTo('reservations.delete')) {
-            return true;
-        }
-
-        // Users can only view their own reservations
-        return $user->hasPermissionTo('reservations.view') && $user->id === $reservation->user_id;
+        if ($user->id === $reservation->user_id) { return true; }
+        if (!$user->hasPermissionTo('reservations.view')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $reservation->tenant_id === null || $reservation->tenant_id === $user->tenant_id;
     }
 
     /**
@@ -45,26 +42,25 @@ class ReservationPolicy
 
     /**
      * Determine if the user can update a reservation.
-     * Admins can update any reservation, users can only update their own.
+     * SuperAdmin can update any, TenantAdmin only their tenant's, users their own.
      */
     public function update(User $user, Reservation $reservation): bool
     {
-        // Admin can update any reservation
-        if ($user->hasPermissionTo('reservations.delete')) {
-            return true;
-        }
-
-        // Users can update their own reservations if they have manage permission
-        return $user->hasPermissionTo('reservations.manage') && $user->id === $reservation->user_id;
+        if ($user->id === $reservation->user_id && $user->hasPermissionTo('reservations.manage')) { return true; }
+        if (!$user->hasPermissionTo('reservations.manage')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $reservation->tenant_id === null || $reservation->tenant_id === $user->tenant_id;
     }
 
     /**
      * Determine if the user can delete a reservation.
-     * Only admins with 'reservations.delete' permission can delete.
+     * SuperAdmin can delete any, TenantAdmin only their tenant's.
      */
     public function delete(User $user, Reservation $reservation): bool
     {
-        return $user->hasPermissionTo('reservations.delete');
+        if (!$user->hasPermissionTo('reservations.delete')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $reservation->tenant_id === null || $reservation->tenant_id === $user->tenant_id;
     }
 
     /**
@@ -96,10 +92,12 @@ class ReservationPolicy
 
     /**
      * Determine if the user can force finish a reservation.
-     * Only admins with 'reservations.delete' permission.
+     * SuperAdmin can force finish any, TenantAdmin only their tenant's.
      */
     public function forceFinish(User $user, Reservation $reservation): bool
     {
-        return $user->hasPermissionTo('reservations.delete');
+        if (!$user->hasPermissionTo('reservations.delete')) { return false; }
+        if ($user->isSuperAdmin()) { return true; }
+        return $reservation->tenant_id === null || $reservation->tenant_id === $user->tenant_id;
     }
 }

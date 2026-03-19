@@ -3,17 +3,36 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Stancl\Tenancy\Database\Models\Tenant as BaseTenant;
+use Stancl\Tenancy\Contracts\TenantWithDatabase;
+use Stancl\Tenancy\Database\Concerns\HasDatabase;
+use Stancl\Tenancy\Database\Concerns\HasDomains;
 
-class Tenant extends Model
+class Tenant extends BaseTenant implements TenantWithDatabase
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, HasDatabase, HasDomains;
+
+    /**
+     * The tenant `id` IS the slug (human-readable, unique identifier).
+     * stancl/tenancy uses string primary keys by default – no changes needed.
+     * The schema name will be: "tenant_" + id (configured via tenancy.database.prefix).
+     */
+
+    /**
+     * Declare which columns are real DB columns (not stored in the `data` JSON).
+     */
+    public static function getCustomColumns(): array
+    {
+        return [
+            'id', 'name', 'tax_id', 'email', 'phone', 'address', 'active',
+            'deleted_at', 'created_at', 'updated_at',
+        ];
+    }
 
     protected $fillable = [
+        'id',      // The slug – must be provided explicitly on create
         'name',
-        'slug',
         'tax_id',
         'email',
         'phone',
@@ -26,42 +45,11 @@ class Tenant extends Model
     ];
 
     /**
-     * Users belonging to this tenant.
+     * Backward-compat accessor: $tenant->slug returns $tenant->id.
      */
-    public function users(): HasMany
+    public function getSlugAttribute(): string
     {
-        return $this->hasMany(User::class);
-    }
-
-    /**
-     * Vehicles belonging to this tenant.
-     */
-    public function vehicles(): HasMany
-    {
-        return $this->hasMany(Vehicle::class);
-    }
-
-    /**
-     * Reservations belonging to this tenant.
-     */
-    public function reservations(): HasMany
-    {
-        return $this->hasMany(Reservation::class);
-    }
-
-    /**
-     * Trips belonging to this tenant.
-     */
-    public function trips(): HasMany
-    {
-        return $this->hasMany(Trip::class);
-    }
-
-    /**
-     * Tickets belonging to this tenant.
-     */
-    public function tickets(): HasMany
-    {
-        return $this->hasMany(Ticket::class);
+        return $this->id;
     }
 }
+
