@@ -73,7 +73,11 @@ class UserPolicy
     public function delete(User $user, User $targetUser): bool
     {
         if ($user->id === $targetUser->id) { return false; }
-        if (!$this->hasPerm($user, 'users.delete')) { return false; }
+
+        $canDelete = $this->hasPerm($user, 'users.delete')
+            || ($user->hasRole('TenantAdmin') && $this->hasPerm($user, 'users.manage'));
+
+        if (!$canDelete) { return false; }
         if ($user->isSuperAdmin()) { return true; }
         return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
     }

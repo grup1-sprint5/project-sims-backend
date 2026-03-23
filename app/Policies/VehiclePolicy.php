@@ -53,7 +53,10 @@ class VehiclePolicy
      */
     public function delete(User $user, Vehicle $vehicle): bool
     {
-        if (!$user->hasPermissionTo('vehicles.delete')) { return false; }
+        $canDelete = $user->hasPermissionTo('vehicles.delete')
+            || ($user->hasRole('TenantAdmin') && $user->hasPermissionTo('vehicles.manage'));
+
+        if (!$canDelete) { return false; }
         if ($user->isSuperAdmin()) { return true; }
         return $vehicle->tenant_id === null || $vehicle->tenant_id === $user->tenant_id;
     }

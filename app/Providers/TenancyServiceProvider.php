@@ -6,12 +6,12 @@ namespace App\Providers;
 
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\App as AppFacade;
 use Illuminate\Support\ServiceProvider;
 use Stancl\JobPipeline\JobPipeline;
 use Stancl\Tenancy\Events;
 use Stancl\Tenancy\Jobs;
 use Stancl\Tenancy\Listeners;
-use Stancl\Tenancy\Middleware;
 use App\Jobs\SeedTenantDatabase;
 
 class TenancyServiceProvider extends ServiceProvider
@@ -121,11 +121,11 @@ class TenancyServiceProvider extends ServiceProvider
     protected function makeTenancyMiddlewareHighestPriority()
     {
         $tenancyMiddleware = [
-            Middleware\InitializeTenancyByRequestData::class,
+            \App\Http\Middleware\InitializeTenancyByDomainOrHeader::class,
         ];
 
         foreach (array_reverse($tenancyMiddleware) as $middleware) {
-            $this->app[\Illuminate\Contracts\Http\Kernel::class]->prependToMiddlewarePriority($middleware);
+            AppFacade::make('Illuminate\\Contracts\\Http\\Kernel')->prependToMiddlewarePriority($middleware);
         }
     }
 }

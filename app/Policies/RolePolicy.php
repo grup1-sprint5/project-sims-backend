@@ -76,7 +76,10 @@ class RolePolicy
             return false;
         }
 
-        if (!$this->hasPerm($user, 'roles.delete')) {
+        $canDelete = $this->hasPerm($user, 'roles.delete')
+            || ($user->hasRole('TenantAdmin') && $this->hasPerm($user, 'roles.manage'));
+
+        if (!$canDelete) {
             return false;
         }
 

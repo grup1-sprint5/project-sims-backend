@@ -58,7 +58,10 @@ class ReservationPolicy
      */
     public function delete(User $user, Reservation $reservation): bool
     {
-        if (!$user->hasPermissionTo('reservations.delete')) { return false; }
+        $canDelete = $user->hasPermissionTo('reservations.delete')
+            || ($user->hasRole('TenantAdmin') && $user->hasPermissionTo('reservations.manage'));
+
+        if (!$canDelete) { return false; }
         if ($user->isSuperAdmin()) { return true; }
         return $reservation->tenant_id === null || $reservation->tenant_id === $user->tenant_id;
     }
@@ -96,7 +99,10 @@ class ReservationPolicy
      */
     public function forceFinish(User $user, Reservation $reservation): bool
     {
-        if (!$user->hasPermissionTo('reservations.delete')) { return false; }
+        $canForceFinish = $user->hasPermissionTo('reservations.delete')
+            || ($user->hasRole('TenantAdmin') && $user->hasPermissionTo('reservations.manage'));
+
+        if (!$canForceFinish) { return false; }
         if ($user->isSuperAdmin()) { return true; }
         return $reservation->tenant_id === null || $reservation->tenant_id === $user->tenant_id;
     }
