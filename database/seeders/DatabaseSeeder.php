@@ -18,10 +18,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Cargar Permisos y Roles primero
+        // 1. Cargar solo los inquilinos primero
         $this->call([
-            PermissionsSeeder::class,
-            RolesSeeder::class,
             TenantsSeeder::class,
         ]);
 
@@ -32,77 +30,11 @@ class DatabaseSeeder extends Seeder
             throw new \RuntimeException('Required tenants not found after TenantsSeeder.');
         }
 
-        $password = Hash::make('password'); // Contraseña común para test
-
-        // 2. Crear ADMIN (El Jefe)
-        $admin = User::firstOrCreate(
-            ['email' => 'admin@test.com'], // Cambiado a test.com para uniformidad
-            [
-                'name' => 'Super Admin',
-                'username' => 'admin',
-                'password' => $password,
-                'active' => true,
-                'tenant_id' => $simsTenant->id,
-            ]
-        );
-        $admin->assignRole('SuperAdmin');
-
-        // 3. Crear CLIENTE (El usuario estándar)
-        $client = User::firstOrCreate(
-            ['email' => 'client@test.com'],
-            [
-                'name' => 'Cliente de Prueba',
-                'username' => 'client',
-                'password' => $password,
-                'active' => true,
-                'tenant_id' => $simsTenant->id,
-            ]
-        );
-        $client->assignRole('Client');
-
-        // 4. Crear MANTENIMIENTO (El técnico)
-        $maintenance = User::firstOrCreate(
-            ['email' => 'maint@test.com'],
-            [
-                'name' => 'Técnico Mantenimiento',
-                'username' => 'maintenance',
-                'password' => $password,
-                'active' => true,
-                'tenant_id' => $ecoTenant->id,
-            ]
-        );
-        $maintenance->assignRole('Maintenance');
-
-        // 5. Crear TENANT ADMIN para SIMS Corp
-        $tenantAdmin1 = User::firstOrCreate(
-            ['email' => 'admin@simscorp.com'],
-            [
-                'name' => 'Admin SIMS Corp',
-                'username' => 'admin_sims',
-                'password' => $password,
-                'active' => true,
-                'tenant_id' => $simsTenant->id,
-            ]
-        );
-        $tenantAdmin1->assignRole('TenantAdmin');
-
-        // 6. Crear TENANT ADMIN para EcoMove SL
-        $tenantAdmin2 = User::firstOrCreate(
-            ['email' => 'admin@ecomove.es'],
-            [
-                'name' => 'Admin EcoMove',
-                'username' => 'admin_ecomove',
-                'password' => $password,
-                'active' => true,
-                'tenant_id' => $ecoTenant->id,
-            ]
-        );
-        $tenantAdmin2->assignRole('TenantAdmin');
-
-        // 7. Crear datos de prueba
-        $this->call([
-            TestDataSeeder::class,
-            MongoVehicleLocationsSeeder::class,
-        ]);
+        // We skip Permissions and Roles globally because those migrations are in database/migrations/tenant/
+        // To seed permissions and roles correctly, use: php artisan tenants:seed --class=PermissionsSeeder (and RolesSeeder)
+        
+        // However, I'll provide a way to seed everything for a tenant if needed.
+        // For now, let's keep the user creation minimal on central if shared, 
+        // but typically users in this architecture are per-tenant.
     }
 }
