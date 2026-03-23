@@ -98,7 +98,8 @@ class InitializeTenancyByDomainOrHeader
             return $next($request);
         }
 
-        // Neither resolved → throw the concrete tenancy exception for request data.
-        throw new TenantCouldNotBeIdentifiedByRequestDataException($tenantKey ?: $host);
+        // Neither resolved → continue without tenant context.
+        // Routes that explicitly require tenancy will then fail later (e.g., unauthorized 401).
+        return $next($request);
     }
 }
