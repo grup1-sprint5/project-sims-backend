@@ -62,16 +62,20 @@ class TenantsSeeder extends Seeder
                 ->where('id', $payload['id'])
                 ->update(['data' => json_encode($newData)]);
 
-            // Detect base domain (excluding protocol and port)
+            // Domain identification logic
             $host = parse_url(config('app.url'), PHP_URL_HOST) ?: 'localhost';
-            $baseDomain = ($host === 'localhost' || $host === '127.0.0.1' || $host === 'app.localhost') 
-                ? 'localhost' 
-                : $host;
+            
+            // Priority: 1. Hardcoded custom domain, 2. Subdomain if not on DO, 3. Base host as fallback
+            $domainName = $tenant['custom_domain'] ?? (
+                ($host === 'localhost' || $host === '127.0.0.1') 
+                    ? $tenant['slug'] . '.localhost'
+                    : $host // Default to base host on DO if no subdomain support
+            );
 
             Domain::updateOrCreate([
                 'tenant_id' => $payload['id'],
             ], [
-                'domain' => $tenant['slug'] . '.' . $baseDomain,
+                'domain' => $domainName,
             ]);
         }
     }
