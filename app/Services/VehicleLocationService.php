@@ -80,4 +80,42 @@ class VehicleLocationService
             'active' => isset($location->active) ? (bool) $location->active : null,
         ];
     }
+
+    /**
+     * Crea o actualiza la ubicación de un vehículo en Mongo.
+     */
+    public function upsertLocation(Vehicle $vehicle, float $latitude, float $longitude, bool $active = false): void
+    {
+        $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
+
+        $payload = [
+            'tenant_id' => $tenantId,
+            'vehicle_id' => $vehicle->id,
+            'license_plate' => $vehicle->license_plate,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'active' => $active,
+        ];
+
+        DB::connection('mongodb')
+            ->table('vehicle_locations')
+            ->updateOrInsert(
+                ['tenant_id' => $tenantId, 'license_plate' => $vehicle->license_plate],
+                $payload
+            );
+    }
+
+    /**
+     * Elimina la ubicación de un vehículo por matrícula en el tenant actual.
+     */
+    public function deleteLocationByPlate(string $licensePlate): void
+    {
+        $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
+
+        DB::connection('mongodb')
+            ->table('vehicle_locations')
+            ->where('tenant_id', $tenantId)
+            ->where('license_plate', $licensePlate)
+            ->delete();
+    }
 }

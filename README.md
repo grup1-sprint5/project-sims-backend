@@ -82,6 +82,32 @@ Use `organization` on login (`/central/login` flow):
 - `ecomove` demo fleet is 4 vehicles (La Ràpita area).
 - `sims-corp` demo fleet is 5 vehicles (Amposta area).
 
+## Create vehicle with map location
+
+When creating/updating a vehicle from admin, send coordinates in the same request.
+
+- Endpoint: `POST /api/vehicles` (or `PUT /api/vehicles/{id}` to update location)
+- Required headers: `Authorization: Bearer <token>`, `X-Tenant: <tenant-slug>`, `Accept: application/json`
+- Coordinates: `latitude` + `longitude` (aliases accepted: `lat` + `lng`/`lon`)
+
+Example payload:
+
+```json
+{
+	"license_plate": "1235SAS",
+	"brand": "Lel",
+	"model": "sas",
+	"active": true,
+	"latitude": 40.70995,
+	"longitude": 0.57965
+}
+```
+
+Notes:
+
+- Coordinates are persisted in Mongo collection `vehicle_locations` with tenant scope.
+- If coordinates are omitted, the vehicle is created but it won't appear in the user map endpoint (`/api/vehicles-map`) until a location is set.
+
 ## Scheduler (Cancel·lació automàtica de reserves)
 
 The backend includes a scheduler that auto-cancels pending reservations after `activation_deadline`.

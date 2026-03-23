@@ -103,11 +103,26 @@ class VehicleController extends Controller
         $this->authorize('create', Vehicle::class);
 
         $data = $request->validated();
+        $latitude = array_key_exists('latitude', $data) ? $data['latitude'] : null;
+        $longitude = array_key_exists('longitude', $data) ? $data['longitude'] : null;
+
+        unset($data['latitude'], $data['longitude']);
         
         // Assign tenant_id from authenticated user
         $data['tenant_id'] = $request->user()->tenant_id;
 
         $vehicle = Vehicle::create($data);
+
+        if ($latitude !== null && $longitude !== null) {
+            $this->locationService->upsertLocation(
+                $vehicle,
+                (float) $latitude,
+                (float) $longitude,
+                false
+            );
+            $vehicle->setAttribute('latitude', (float) $latitude);
+            $vehicle->setAttribute('longitude', (float) $longitude);
+        }
 
         return response()->json([
             'message' => 'Vehículo creado correctamente',
@@ -134,7 +149,29 @@ class VehicleController extends Controller
     {
         $this->authorize('update', $vehicle);
 
-        $vehicle->update($request->validated());
+        $data = $request->validated();
+
+        $oldPlate = $vehicle->license_plate;
+        $oldLocation = $this->locationService->getLocationByPlate($oldPlate);
+
+        $hasLatitude = array_key_exists('latitude', $data);
+        $hasLongitude = array_key_exists('longitude', $data);
+        $latitude = $hasLatitude ? (float) $data['latitude'] : ($oldLocation['latitude'] ?? null);
+        $longitude = $hasLongitude ? (float) $data['longitude'] : ($oldLocation['longitude'] ?? null);
+
+        unset($data['latitude'], $data['longitude']);
+
+        $vehicle->update($data);
+
+        if ($vehicle->license_plate !== $oldPlate) {
+            $this->locationService->deleteLocationByPlate($oldPlate);
+        }
+
+        if ($latitude !== null && $longitude !== null) {
+            $this->locationService->upsertLocation($vehicle, $latitude, $longitude, (bool) ($oldLocation['active'] ?? false));
+            $vehicle->setAttribute('latitude', $latitude);
+            $vehicle->setAttribute('longitude', $longitude);
+        }
 
         return response()->json([
             'message' => 'Vehículo actualizado correctamente',
@@ -148,6 +185,8 @@ class VehicleController extends Controller
     public function destroy(Vehicle $vehicle): JsonResponse
     {
         $this->authorize('delete', $vehicle);
+
+        $this->locationService->deleteLocationByPlate($vehicle->license_plate);
 
         $vehicle->delete();
 

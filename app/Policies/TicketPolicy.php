@@ -54,7 +54,10 @@ class TicketPolicy
      */
     public function delete(User $user, Ticket $ticket): bool
     {
-        if (!$user->hasPermissionTo('tickets.delete')) { return false; }
+        $canDelete = $user->hasPermissionTo('tickets.delete')
+            || ($user->hasRole('TenantAdmin') && $user->hasPermissionTo('tickets.manage'));
+
+        if (!$canDelete) { return false; }
         if ($user->isSuperAdmin()) { return true; }
         return $ticket->tenant_id === null || $ticket->tenant_id === $user->tenant_id;
     }
