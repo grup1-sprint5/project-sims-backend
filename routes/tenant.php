@@ -36,14 +36,14 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
 
         Route::post('/login', [AuthController::class, 'login'])->name('tenant.login');
         Route::post('/auth/exchange-token', [AuthExchangeController::class, 'exchange'])->name('tenant.exchange');
+        Route::post('/users', [UserController::class, 'store']); // Public registration
 
         Route::middleware('auth.tenant-token')->group(function () {
 
             Route::post('/logout', [AuthController::class, 'logout']);
             Route::get('/user', [AuthController::class, 'user']);
 
-            // Users
-            Route::post('/users', [UserController::class, 'store']);
+            // Users management (Authenticated only)
             Route::post('/users/{user}/restore', [UserController::class, 'restore']);
             Route::apiResource('users', UserController::class)->except(['store']);
 
