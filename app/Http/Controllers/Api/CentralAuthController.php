@@ -35,7 +35,7 @@ class CentralAuthController extends Controller
             $organization = strtolower(trim((string) $validated['organization']));
 
             // Use explicit central connection to avoid issues if tenancy was already partially initialized
-            $tenant = Tenant::on($centralConnection)->query()
+            $tenant = Tenant::on($centralConnection)
                 ->where('id', $organization)
                 ->orWhereRaw('LOWER(name) = ?', [$organization])
                 ->first();
@@ -103,7 +103,7 @@ class CentralAuthController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                $domain = Domain::on($centralConnection)->query()->where('tenant_id', $tenant->id)->orderBy('id')->value('domain');
+                $domain = Domain::on($centralConnection)->where('tenant_id', $tenant->id)->orderBy('id')->value('domain');
                 $tenantHost = $domain ?: ($tenant->id . '.localhost');
 
                 return response()->json([
