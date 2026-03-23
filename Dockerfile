@@ -17,6 +17,9 @@ WORKDIR /var/www/html
 # Copy application code
 COPY . /var/www/html
 
+# Optional runtime migrations (controlled by RUN_MIGRATIONS/RUN_TENANT_MIGRATIONS env vars)
+RUN chmod +x /var/www/html/docker/entrypoint.sh || true
+
 # Install composer dependencies if composer.json exists
 RUN if [ -f /var/www/html/composer.json ]; then composer install --prefer-dist --no-interaction --optimize-autoloader; fi || true
 
@@ -24,4 +27,5 @@ RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cac
 
 EXPOSE 9000
 
+ENTRYPOINT ["/var/www/html/docker/entrypoint.sh"]
 CMD ["php-fpm"]

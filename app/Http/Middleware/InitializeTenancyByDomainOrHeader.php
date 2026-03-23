@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Stancl\Tenancy\Database\Models\Domain;
 use Stancl\Tenancy\Exceptions\TenantCouldNotBeIdentifiedByRequestDataException;
+use Throwable;
 
 /**
  * Identifies the current tenant using two strategies (in order):
@@ -32,7 +33,32 @@ class InitializeTenancyByDomainOrHeader
             $tenant = $tenantModel::find($tenantKey);
 
             if ($tenant) {
-                tenancy()->initialize($tenant);
+                try {
+                    tenancy()->initialize($tenant);
+                } catch (Throwable $e) {
+                    report($e);
+
+                    $message = strtolower($e->getMessage());
+                    $looksLikeMissingTenantDatabase = (
+                        (str_contains($message, 'schema') && str_contains($message, 'does not exist'))
+                        || str_contains($message, 'unknown database')
+                        || str_contains($message, 'database') && str_contains($message, 'does not exist')
+                    );
+
+                    if ($request->expectsJson() || $request->is('api/*')) {
+                        return response()->json([
+                            'message' => $looksLikeMissingTenantDatabase
+                                ? 'Tenant database is not initialized on the server.'
+                                : 'Tenant initialization failed.',
+                            'error' => $looksLikeMissingTenantDatabase
+                                ? 'tenant_database_missing'
+                                : 'tenant_initialization_failed',
+                        ], $looksLikeMissingTenantDatabase ? 409 : 500);
+                    }
+
+                    throw $e;
+                }
+
                 return $next($request);
             }
         }
@@ -43,7 +69,32 @@ class InitializeTenancyByDomainOrHeader
         $domain = Domain::where('domain', $host)->first();
 
         if ($domain) {
-            tenancy()->initialize($domain->tenant);
+            try {
+                tenancy()->initialize($domain->tenant);
+            } catch (Throwable $e) {
+                report($e);
+
+                $message = strtolower($e->getMessage());
+                $looksLikeMissingTenantDatabase = (
+                    (str_contains($message, 'schema') && str_contains($message, 'does not exist'))
+                    || str_contains($message, 'unknown database')
+                    || str_contains($message, 'database') && str_contains($message, 'does not exist')
+                );
+
+                if ($request->expectsJson() || $request->is('api/*')) {
+                    return response()->json([
+                        'message' => $looksLikeMissingTenantDatabase
+                            ? 'Tenant database is not initialized on the server.'
+                            : 'Tenant initialization failed.',
+                        'error' => $looksLikeMissingTenantDatabase
+                            ? 'tenant_database_missing'
+                            : 'tenant_initialization_failed',
+                    ], $looksLikeMissingTenantDatabase ? 409 : 500);
+                }
+
+                throw $e;
+            }
+
             return $next($request);
         }
 

@@ -16,6 +16,10 @@ class AuthExchangeController extends Controller
      */
     public function exchange(Request $request): JsonResponse
     {
+        $centralConnection = (string) (config('tenancy.database.central_connection')
+            ?? config('database.default')
+            ?? 'pgsql');
+
         $validated = $request->validate([
             'exchange_token' => ['required', 'string', 'min:32'],
         ]);
@@ -27,8 +31,8 @@ class AuthExchangeController extends Controller
 
         $tokenHash = hash('sha256', $validated['exchange_token']);
 
-        $row = DB::connection('pgsql')->transaction(function () use ($tokenHash, $tenantId) {
-            $candidate = DB::connection('pgsql')
+        $row = DB::connection($centralConnection)->transaction(function () use ($tokenHash, $tenantId, $centralConnection) {
+            $candidate = DB::connection($centralConnection)
                 ->table('login_exchange_tokens')
                 ->where('token_hash', $tokenHash)
                 ->where('tenant_id', $tenantId)
@@ -41,7 +45,7 @@ class AuthExchangeController extends Controller
                 return null;
             }
 
-            DB::connection('pgsql')
+            DB::connection($centralConnection)
                 ->table('login_exchange_tokens')
                 ->where('id', $candidate->id)
                 ->update([

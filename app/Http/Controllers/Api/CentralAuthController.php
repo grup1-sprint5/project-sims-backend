@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Stancl\Tenancy\Database\Models\Domain;
+use Throwable;
 
 class CentralAuthController extends Controller
 {
@@ -20,6 +21,10 @@ class CentralAuthController extends Controller
      */
     public function login(Request $request): JsonResponse
     {
+        $centralConnection = (string) (config('tenancy.database.central_connection')
+            ?? config('database.default')
+            ?? 'pgsql');
+
         $validated = $request->validate([
             'organization' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email'],
@@ -30,7 +35,7 @@ class CentralAuthController extends Controller
 
         $tenant = Tenant::query()
             ->where('id', $organization)
-            ->orWhere('name', 'ILIKE', $organization)
+            ->orWhereRaw('LOWER(name) = ?', [$organization])
             ->first();
 
         if (!$tenant) {
@@ -45,7 +50,27 @@ class CentralAuthController extends Controller
             ], 403);
         }
 
-        tenancy()->initialize($tenant);
+        try {
+            tenancy()->initialize($tenant);
+        } catch (Throwable $e) {
+            report($e);
+
+            $message = strtolower($e->getMessage());
+            $looksLikeMissingTenantDatabase = (
+                (str_contains($message, 'schema') && str_contains($message, 'does not exist'))
+                || str_contains($message, 'unknown database')
+                || (str_contains($message, 'database') && str_contains($message, 'does not exist'))
+            );
+
+            return response()->json([
+                'message' => $looksLikeMissingTenantDatabase
+                    ? 'Tenant database is not initialized on the server.'
+                    : 'Tenant initialization failed.',
+                'error' => $looksLikeMissingTenantDatabase
+                    ? 'tenant_database_missing'
+                    : 'tenant_initialization_failed',
+            ], $looksLikeMissingTenantDatabase ? 409 : 500);
+        }
 
         try {
             $user = User::query()->where('email', $validated['email'])->first();
@@ -67,7 +92,7 @@ class CentralAuthController extends Controller
             $exchangeToken = Str::random(96);
             $exchangeTokenHash = hash('sha256', $exchangeToken);
 
-            DB::connection('pgsql')->table('login_exchange_tokens')->insert([
+            DB::connection($centralConnection)->table('login_exchange_tokens')->insert([
                 'token_hash' => $exchangeTokenHash,
                 'tenant_id' => (string) $tenant->id,
                 'user_id' => (int) $user->id,
