@@ -12,6 +12,7 @@
         "laravel/tinker": "^2.10.1",
         "mongodb/laravel-mongodb": "^5.5",
         "spatie/laravel-permission": "^6.24",
+        "stancl/jobpipeline": "^1.8",
         "stancl/tenancy": "^3.9"
     },
     "require-dev": {
