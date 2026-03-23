@@ -104,7 +104,16 @@ class CentralAuthController extends Controller
                 ]);
 
                 $domain = Domain::on($centralConnection)->where('tenant_id', $tenant->id)->orderBy('id')->value('domain');
-                $tenantHost = $domain ?: ($tenant->id . '.localhost');
+                
+                // On DigitalOcean or similar environments without wildcard subdomains:
+                // if no specific domain is registered, stay on the current host.
+                $currentHost = $request->getHost();
+                $tenantHost = $domain ?: $currentHost;
+
+                // Fallback for local development if we are indeed on localhost
+                if (!$domain && ($currentHost === 'localhost' || $currentHost === '127.0.0.1')) {
+                    $tenantHost = $tenant->id . '.localhost';
+                }
 
                 return response()->json([
                     'message' => 'Central login successful',
