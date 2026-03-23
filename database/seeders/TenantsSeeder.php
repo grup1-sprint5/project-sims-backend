@@ -62,10 +62,16 @@ class TenantsSeeder extends Seeder
                 ->where('id', $payload['id'])
                 ->update(['data' => json_encode($newData)]);
 
-            Domain::firstOrCreate([
-                'domain' => $tenant['slug'] . '.localhost',
-            ], [
+            // Detect base domain (excluding protocol and port)
+            $host = parse_url(config('app.url'), PHP_URL_HOST) ?: 'localhost';
+            $baseDomain = ($host === 'localhost' || $host === '127.0.0.1' || $host === 'app.localhost') 
+                ? 'localhost' 
+                : $host;
+
+            Domain::updateOrCreate([
                 'tenant_id' => $payload['id'],
+            ], [
+                'domain' => $tenant['slug'] . '.' . $baseDomain,
             ]);
         }
     }
