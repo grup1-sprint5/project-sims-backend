@@ -3,19 +3,26 @@
 namespace Database\Seeders;
 
 use App\Models\Vehicle;
+use App\Services\VehicleLocationService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 class MongoVehicleLocationsSeeder extends Seeder
 {
+    private VehicleLocationService $locationService;
+
+    public function __construct(VehicleLocationService $locationService)
+    {
+        $this->locationService = $locationService;
+    }
+
     public function run()
     {
         $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
         if (!$tenantId) {
+            echo "⚠️  No tenant context initialized. Skipping MongoVehicleLocationsSeeder.\n";
             return;
         }
-
-        $connection = DB::connection('mongodb');
 
         $vehicleLimitByTenant = [
             'sims-corp' => 5,
@@ -31,16 +38,9 @@ class MongoVehicleLocationsSeeder extends Seeder
             ->get();
 
         if ($vehicles->isEmpty()) {
+            echo "⚠️  No vehicles found for tenant {$tenantId}. Skipping MongoVehicleLocationsSeeder.\n";
             return;
         }
-
-        $connection->table('vehicle_locations')
-            ->where('tenant_id', $tenantId)
-            ->delete();
-
-        $connection->table('vehicle_locations')
-            ->whereNull('tenant_id')
-            ->delete();
 
         $coordinatesByTenant = [
             'sims-corp' => [
@@ -64,19 +64,15 @@ class MongoVehicleLocationsSeeder extends Seeder
         foreach ($vehicles as $index => $vehicle) {
             $point = $coordinates[$index] ?? $coordinates[array_key_last($coordinates)];
 
-            $location = [
-                'tenant_id' => $tenantId,
-                'vehicle_id' => $vehicle->id,
-                'license_plate' => $vehicle->license_plate,
-                'latitude' => (float) $point['latitude'],
-                'longitude' => (float) $point['longitude'],
-                'active' => false,
-            ];
-
-            $connection->table('vehicle_locations')->updateOrInsert(
-                ['tenant_id' => $tenantId, 'license_plate' => $vehicle->license_plate],
-                $location
+            // This service method now handles both MongoDB and PostgreSQL fallback
+            $this->locationService->upsertLocation(
+                $vehicle,
+                (float) $point['latitude'],
+                (float) $point['longitude'],
+                false // active
             );
         }
+
+        echo "✅ Vehicle locations seeded for tenant {$tenantId} (MongoDB if available + SQL fallback populated)!\n";
     }
 }
