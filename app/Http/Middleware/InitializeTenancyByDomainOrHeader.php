@@ -98,8 +98,8 @@ class InitializeTenancyByDomainOrHeader
             return $next($request);
         }
 
-        // Neither resolved → continue without tenant context.
-        // Routes that explicitly require tenancy will then fail later (e.g., unauthorized 401).
-        return $next($request);
+        // Neither resolved → throw exception (or return 401).
+        // This blocks access to tenant-scoped routes when the tenant is missing.
+        throw new \Stancl\Tenancy\Exceptions\TenantCouldNotBeIdentifiedException($request->getHost());
     }
 }
