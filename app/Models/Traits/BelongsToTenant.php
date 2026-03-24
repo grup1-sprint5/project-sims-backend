@@ -21,8 +21,12 @@ trait BelongsToTenant
 
         // Auto-assign tenant_id on creating from the active tenancy context.
         static::creating(function ($model) {
-            if (empty($model->tenant_id) && tenancy()->initialized) {
-                $model->tenant_id = tenant()->id;
+            if (empty($model->tenant_id)) {
+                if (tenancy()->initialized) {
+                    $model->tenant_id = tenant()->id;
+                } elseif (auth()->check() && auth()->user()->tenant_id) {
+                    $model->tenant_id = auth()->user()->tenant_id;
+                }
             }
         });
     }
