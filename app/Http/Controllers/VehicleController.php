@@ -33,11 +33,6 @@ class VehicleController extends Controller
         
         $query = Vehicle::query();
 
-        // Filter by tenant: Super admins (no tenant) see all, others see only their tenant
-        if ($user->tenant_id !== null) {
-            $query->where('tenant_id', $user->tenant_id);
-        }
-
         // Búsqueda general por license_plate, brand o model
         if ($request->filled('search')) {
             $search = $request->input('search');
