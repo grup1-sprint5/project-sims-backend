@@ -40,6 +40,16 @@ class TenantDatabaseSeeder extends Seeder
             ]
         )->assignRole('Client');
 
+        User::firstOrCreate(
+            ['email' => 'maint@test.com'],
+            [
+                'name' => 'Maintenance User',
+                'username' => 'maint',
+                'password' => $password,
+                'active' => true,
+            ]
+        )->assignRole('Maintenance');
+
         // Add additional test data specifically for this tenant
         $this->call([
             TestDataSeeder::class,
