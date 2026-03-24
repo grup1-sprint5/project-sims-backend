@@ -32,6 +32,11 @@ class UserController extends Controller
         }
 
         $query = User::with(['roles', 'tenant']);
+        
+        // Force isolation for non-superadmins, even if TenantScope fails for some reason
+        if (!$authUser->isSuperAdmin() && $authUser->tenant_id) {
+            $query->where('tenant_id', $authUser->tenant_id);
+        }
 
         if ($search = $request->input('search')) {
             $query->where(fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
