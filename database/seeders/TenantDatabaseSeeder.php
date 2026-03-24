@@ -19,24 +19,27 @@ class TenantDatabaseSeeder extends Seeder
         $password = Hash::make('password');
 
         // 2. Create standard users for this specific tenant
-        // Notice: No tenant_id needed here because we are ALREADY inside the tenant connection/context
-        User::firstOrCreate(
+        // Notice: We use withoutGlobalScopes to avoid unique constraint 
+        // issues if the user already exists in the global 'users' table.
+        User::withoutGlobalScopes()->updateOrCreate(
             ['email' => 'admin@test.com'],
             [
                 'name' => 'Admin User',
                 'username' => 'admin',
                 'password' => $password,
                 'active' => true,
+                'tenant_id' => tenant('id'),
             ]
         )->assignRole('SuperAdmin');
 
-        User::firstOrCreate(
+        User::withoutGlobalScopes()->updateOrCreate(
             ['email' => 'client@test.com'],
             [
                 'name' => 'Client User',
                 'username' => 'client',
                 'password' => $password,
                 'active' => true,
+                'tenant_id' => tenant('id'),
             ]
         )->assignRole('Client');
 
