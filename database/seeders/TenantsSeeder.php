@@ -64,19 +64,22 @@ class TenantsSeeder extends Seeder
 
             // Domain identification logic
             $host = parse_url(config('app.url'), PHP_URL_HOST) ?: 'localhost';
+            $baseDomain = ($host === 'localhost' || $host === '127.0.0.1') ? 'localhost' : $host;
             
-            // Priority: 1. Hardcoded custom domain, 2. Subdomain if not on DO, 3. Base host as fallback
-            $domainName = $tenant['custom_domain'] ?? (
-                ($host === 'localhost' || $host === '127.0.0.1') 
-                    ? $tenant['slug'] . '.localhost'
-                    : $host // Default to base host on DO if no subdomain support
-            );
+            // Priority: 1. Hardcoded custom domain, 2. Dynamic subdomain (slug.base)
+            $domainName = $tenant['custom_domain'] ?? ($tenant['slug'] . '.' . $baseDomain);
 
-            Domain::updateOrCreate([
-                'tenant_id' => $payload['id'],
-            ], [
-                'domain' => $domainName,
-            ]);
+            // In some environments like DO without wildcard DNS, we should NOT 
+            // register the central domain to a specific tenant in the database.
+            $isCentralHostOnDO = str_contains($domainName, 'ondigitalocean.app');
+
+            if (!$isCentralHostOnDO || ($tenant['custom_domain'] ?? false)) {
+                Domain::updateOrCreate([
+                    'domain' => $domainName,
+                ], [
+                    'tenant_id' => $payload['id'],
+                ]);
+            }
         }
     }
 }
