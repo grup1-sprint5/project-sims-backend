@@ -69,11 +69,11 @@ class TenantsSeeder extends Seeder
             // Priority: 1. Hardcoded custom domain, 2. Dynamic subdomain (slug.base)
             $domainName = $tenant['custom_domain'] ?? ($tenant['slug'] . '.' . $baseDomain);
 
-            // In some environments like DO without wildcard DNS, we should NOT 
-            // register the central domain to a specific tenant in the database.
-            $isCentralHostOnDO = str_contains($domainName, 'ondigitalocean.app');
+            // Register the domain if it's NOT a naked .ondigitalocean.app (shared host)
+            // But ALLOW if it's under our new custom domain grup1-sims.com
+            $isGenericDO = str_contains($domainName, 'ondigitalocean.app') && !str_contains($domainName, 'grup1-sims.com');
 
-            if (!$isCentralHostOnDO || ($tenant['custom_domain'] ?? false)) {
+            if (!$isGenericDO || ($tenant['custom_domain'] ?? false)) {
                 Domain::updateOrCreate([
                     'domain' => $domainName,
                 ], [
