@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\SensorDataController;
+use App\Http\Controllers\Api\ActuatorController;
 
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\TicketController;
@@ -73,5 +74,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [SensorDataController::class, 'index'])->name('index');
         Route::get('/devices', [SensorDataController::class, 'devices'])->name('devices');
         Route::get('/devices/{deviceId}/latest', [SensorDataController::class, 'latestByDevice'])->name('latest');
+    });
+
+    // Actuator (IoT) endpoints
+    Route::prefix('actuator')->name('actuator.')->group(function () {
+        Route::get('/status', [ActuatorController::class, 'status'])->name('status');
+        Route::post('/', [ActuatorController::class, 'setState'])->name('set-state');
     });
 });
