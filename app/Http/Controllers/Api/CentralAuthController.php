@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Stancl\Tenancy\Database\Models\Domain;
@@ -34,11 +35,40 @@ class CentralAuthController extends Controller
 
             $organization = strtolower(trim((string) $validated['organization']));
 
-            // Use explicit central connection to avoid issues if tenancy was already partially initialized
-            $tenant = Tenant::on($centralConnection)
-                ->where('id', $organization)
-                ->orWhereRaw('LOWER(name) = ?', [$organization])
-                ->first();
+            // Use explicit central connection to avoid issues if tenancy was already partially initialized.
+            // Support both schemas:
+            // - New schema: tenants.id is a string slug
+            // - Legacy schema: tenants.id is numeric and slug may be in a dedicated column
+            $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
+            $idColumnType = null;
+            try {
+                $idColumnType = strtolower((string) Schema::connection($centralConnection)->getColumnType('tenants', 'id'));
+            } catch (Throwable $e) {
+                report($e);
+            }
+
+            $tenantQuery = Tenant::on($centralConnection)
+                ->whereRaw('LOWER(name) = ?', [$organization]);
+
+            if ($hasSlugColumn) {
+                $tenantQuery->orWhereRaw('LOWER(slug) = ?', [$organization]);
+            }
+
+            $idIsNumeric = in_array($idColumnType, ['integer', 'bigint', 'smallint', 'tinyint'], true);
+            $idIsString = in_array($idColumnType, ['string', 'text', 'char', 'uuid'], true);
+
+            if ($idIsNumeric) {
+                if (ctype_digit($organization)) {
+                    $tenantQuery->orWhere('id', (int) $organization);
+                }
+            } else {
+                // Default to text comparison when type is unknown or string-like.
+                if ($idIsString || $idColumnType === null) {
+                    $tenantQuery->orWhere('id', $organization);
+                }
+            }
+
+            $tenant = $tenantQuery->first();
 
             if (!$tenant) {
                 throw ValidationException::withMessages([
@@ -103,9 +133,34 @@ class CentralAuthController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                $domain = Domain::on($centralConnection)->where('tenant_id', $tenant->id)->orderBy('id')->value('domain');
-                
                 $currentHost = $request->getHost();
+                $domain = null;
+
+                if (Schema::connection($centralConnection)->hasTable('domains')) {
+                    $domainTenantIdType = null;
+                    try {
+                        $domainTenantIdType = strtolower((string) Schema::connection($centralConnection)->getColumnType('domains', 'tenant_id'));
+                    } catch (Throwable $e) {
+                        report($e);
+                    }
+
+                    $domainQuery = Domain::on($centralConnection)->orderBy('id');
+                    $tenantIdValue = $tenant->id;
+
+                    if (in_array($domainTenantIdType, ['integer', 'bigint', 'smallint', 'tinyint'], true)) {
+                        if (is_numeric($tenantIdValue)) {
+                            $domainQuery->where('tenant_id', (int) $tenantIdValue);
+                        } else {
+                            $domainQuery = null;
+                        }
+                    } else {
+                        $domainQuery->where('tenant_id', (string) $tenantIdValue);
+                    }
+
+                    if ($domainQuery) {
+                        $domain = $domainQuery->value('domain');
+                    }
+                }
 
                 // FORCE Single Domain mode for DigitalOcean App Platform default domains
                 // to prevent NXDOMAIN errors with subdomains.
