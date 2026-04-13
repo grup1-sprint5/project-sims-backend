@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 class SensorDataService
@@ -31,6 +30,28 @@ class SensorDataService
         $res = Http::timeout($this->iotTimeoutSeconds())
             ->acceptJson()
             ->get($url, $query);
+
+        if (!$res->successful()) {
+            return [
+                'success' => false,
+                'message' => $res->body() ?: ('IoT microservice error (' . $res->status() . ')'),
+                'status'  => $res->status(),
+            ];
+        }
+
+        return (array) $res->json();
+    }
+
+    /**
+     * Fa una petició POST al microservei IoT (FastAPI) i retorna el JSON.
+     */
+    private function iotPost(string $path, array $payload = []): array
+    {
+        $url = $this->iotBaseUrl() . $path;
+
+        $res = Http::timeout($this->iotTimeoutSeconds())
+            ->acceptJson()
+            ->post($url, $payload);
 
         if (!$res->successful()) {
             return [
@@ -105,5 +126,44 @@ class SensorDataService
 
         $reading = $json['data'] ?? null;
         return is_array($reading) ? $reading : null;
+    }
+
+    /**
+     * Consulta l'estat actual de l'actuador (LED) via microservei IoT.
+     */
+    public function getActuatorStatus(): array
+    {
+        $json = $this->iotGet('/api/actuator/status');
+
+        return [
+            'success' => (bool) ($json['success'] ?? false),
+            'message' => (string) ($json['message'] ?? ''),
+            'current_state' => $json['current_state'] ?? null,
+        ];
+    }
+
+    /**
+     * Envia una ordre ON/OFF a l'actuador (LED) via microservei IoT.
+     */
+    public function setActuatorState(string $state): array
+    {
+        $normalizedState = strtoupper(trim($state));
+        if (!in_array($normalizedState, ['ON', 'OFF'], true)) {
+            return [
+                'success' => false,
+                'message' => "state must be 'ON' or 'OFF'",
+                'current_state' => null,
+            ];
+        }
+
+        $json = $this->iotPost('/api/actuator', [
+            'state' => $normalizedState,
+        ]);
+
+        return [
+            'success' => (bool) ($json['success'] ?? false),
+            'message' => (string) ($json['message'] ?? ''),
+            'current_state' => $json['current_state'] ?? null,
+        ];
     }
 }
