@@ -58,19 +58,22 @@ class CentralAuthController extends Controller
                 }
             }
 
-            $idIsNumeric = in_array($idColumnType, ['integer', 'bigint', 'smallint', 'tinyint'], true);
-            $idIsString = in_array($idColumnType, ['string', 'text', 'char', 'uuid'], true);
+            $idType = strtolower((string) ($idColumnType ?? ''));
+            $idIsNumeric = preg_match('/(tinyint|smallint|mediumint|bigint|integer|int|serial)/', $idType) === 1;
+            $idIsStringLike = $idType === ''
+                || str_contains($idType, 'char')
+                || in_array($idType, ['string', 'text', 'uuid'], true);
 
             if ($idIsNumeric) {
                 if (ctype_digit($organizationRaw)) {
                     $tenantQuery->orWhere('id', (int) $organizationRaw);
                 }
             } else {
-                // Default to text comparison when type is unknown or string-like.
-                if ($idIsString || $idColumnType === null) {
-                    $tenantQuery->orWhere('id', $organizationRaw);
+                // Compare with id as text for string-like/unknown id columns (e.g. varchar, uuid).
+                if ($idIsStringLike) {
+                    $tenantQuery->orWhereRaw('LOWER(CAST(id AS TEXT)) = ?', [$organizationRaw]);
                     if ($organizationSlug !== '' && $organizationSlug !== $organizationRaw) {
-                        $tenantQuery->orWhere('id', $organizationSlug);
+                        $tenantQuery->orWhereRaw('LOWER(CAST(id AS TEXT)) = ?', [$organizationSlug]);
                     }
                 }
             }
