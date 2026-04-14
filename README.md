@@ -124,6 +124,36 @@ Local development:
 docker compose exec app php artisan schedule:work
 ```
 
+## Stripe payments (reservations)
+
+Add these values in `.env`:
+
+```bash
+STRIPE_KEY=pk_test_xxx
+STRIPE_SECRET=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+STRIPE_SUCCESS_URL=http://localhost:5173/client/bookings
+STRIPE_CANCEL_URL=http://localhost:5173/client/bookings
+```
+
+New endpoints:
+
+- `POST /api/reservations/{reservation}/checkout-session` (tenant auth required)
+- `POST /api/payments/stripe/webhook` (central webhook, no auth)
+
+Typical flow:
+
+1. Create reservation (`POST /api/reservations`) -> reservation stays `pending` + `payment_status=unpaid`.
+2. Create checkout session (`POST /api/reservations/{id}/checkout-session`) and redirect user to returned `checkout_url`.
+3. Stripe calls webhook on payment completion and backend marks reservation as `payment_status=paid`.
+4. Reservation activation (`POST /api/reservations/{id}/activate`) is allowed only when payment is completed.
+
+Local webhook testing:
+
+```bash
+stripe listen --forward-to http://localhost:8001/api/payments/stripe/webhook
+```
+
 ## Full reset (danger: deletes tenant data)
 
 ```bash

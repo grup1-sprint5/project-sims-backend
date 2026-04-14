@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\CentralAuthController;
+use App\Http\Controllers\StripeWebhookController;
 
 /*
 |--------------------------------------------------------------------------
@@ -18,3 +19,4 @@ use App\Http\Controllers\Api\CentralAuthController;
 
 Route::get('/health', fn () => response()->json(['status' => 'ok']));
 Route::post('/central/login', [CentralAuthController::class, 'login']);
+Route::post('/payments/stripe/webhook', [StripeWebhookController::class, 'handle']);

@@ -16,6 +16,7 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\TicketMessageController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\AdminReservationController;
+use App\Http\Controllers\WalletController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\TenantDomainController;
 
@@ -79,6 +80,11 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
             Route::post('reservations/{reservation}/finish', [ReservationController::class, 'finish']);
             Route::post('reservations/{reservation}/cancel', [ReservationController::class, 'cancel']);
             Route::post('reservations/{reservation}/force-finish', [ReservationController::class, 'forceFinish']);
+            Route::post('reservations/{reservation}/checkout-session', [ReservationController::class, 'createStripeCheckoutSession']);
+
+            // Wallet (Stripe top-up + balance)
+            Route::get('wallet/balance', [WalletController::class, 'balance']);
+            Route::post('wallet/checkout-session', [WalletController::class, 'createStripeCheckoutSession']);
 
             // Reservations – admin operations
             Route::prefix('admin')->name('admin.')->group(function () {
