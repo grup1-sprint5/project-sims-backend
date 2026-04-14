@@ -85,6 +85,7 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
             // Wallet (Stripe top-up + balance)
             Route::get('wallet/balance', [WalletController::class, 'balance']);
             Route::post('wallet/checkout-session', [WalletController::class, 'createStripeCheckoutSession']);
+            Route::post('wallet/confirm-session', [WalletController::class, 'confirmStripeCheckoutSession']);
 
             // Reservations – admin operations
             Route::prefix('admin')->name('admin.')->group(function () {
