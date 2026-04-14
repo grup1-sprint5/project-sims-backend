@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Tenant;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Stancl\Tenancy\Database\Models\Domain;
@@ -47,7 +46,17 @@ class TenantsSeeder extends Seeder
             unset($payload['city'], $payload['map_center_lat'], $payload['map_center_lng']);
             unset($payload['slug']);
 
-            Tenant::firstOrCreate(['id' => $payload['id']], $payload);
+            $exists = DB::table('tenants')->where('id', $payload['id'])->exists();
+            if ($exists) {
+                DB::table('tenants')->where('id', $payload['id'])->update(array_merge($payload, [
+                    'updated_at' => now(),
+                ]));
+            } else {
+                DB::table('tenants')->insert(array_merge($payload, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]));
+            }
 
             $existingData = DB::table('tenants')->where('id', $payload['id'])->value('data');
             $decodedData = is_string($existingData) ? (json_decode($existingData, true) ?: []) : ((array) $existingData);

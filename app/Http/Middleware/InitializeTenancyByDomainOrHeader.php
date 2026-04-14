@@ -5,7 +5,6 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Stancl\Tenancy\Database\Models\Domain;
-use Stancl\Tenancy\Exceptions\TenantCouldNotBeIdentifiedByRequestDataException;
 use Throwable;
 
 /**
@@ -98,8 +97,14 @@ class InitializeTenancyByDomainOrHeader
             return $next($request);
         }
 
-        // Neither resolved → throw exception (or return 401).
-        // This blocks access to tenant-scoped routes when the tenant is missing.
-        throw new \Stancl\Tenancy\Exceptions\TenantCouldNotBeIdentifiedException($request->getHost());
+        // Neither strategy resolved a tenant.
+        if ($request->expectsJson() || $request->is('api/*')) {
+            return response()->json([
+                'message' => 'Tenant not identified. Provide X-Tenant header or use a registered tenant domain.',
+                'error' => 'tenant_not_identified',
+            ], 400);
+        }
+
+        abort(400, 'Tenant not identified.');
     }
 }
