@@ -11,14 +11,56 @@ use Illuminate\Support\Facades\DB;
 class AdminReservationController extends Controller
 {
     /**
+     * Revenue summary for the current tenant (paid reservations only).
+     */
+    public function revenueSummary(Request $request)
+    {
+        $this->authorize('viewAny', Reservation::class);
+
+        $validated = $request->validate([
+            'period' => ['nullable', 'in:today,7d,30d,year,total'],
+        ]);
+
+        $period = $validated['period'] ?? 'total';
+        $start = match ($period) {
+            'today' => now()->startOfDay(),
+            '7d' => now()->subDays(7),
+            '30d' => now()->subDays(30),
+            'year' => now()->startOfYear(),
+            default => null,
+        };
+
+        $paidQuery = Reservation::query()->where('payment_status', 'paid');
+
+        if ($start) {
+            $paidQuery->whereRaw('COALESCE(paid_at, updated_at, created_at) >= ?', [$start]);
+        }
+
+        $paidReservations = (clone $paidQuery)->count();
+        $grossRevenue = round((float) (clone $paidQuery)->sum('total_price'), 2);
+
+        $pendingPaymentsQuery = Reservation::query()->where('payment_status', 'unpaid');
+        if ($start) {
+            $pendingPaymentsQuery->where('created_at', '>=', $start);
+        }
+
+        return response()->json([
+            'period' => $period,
+            'currency' => 'EUR',
+            'gross_revenue' => $grossRevenue,
+            'paid_reservations' => $paidReservations,
+            'average_ticket' => $paidReservations > 0 ? round($grossRevenue / $paidReservations, 2) : 0,
+            'pending_payments' => (clone $pendingPaymentsQuery)->count(),
+        ]);
+    }
+
+    /**
      * List all reservations with filtering by status.
      * Admin only operation.
      */
     public function index(Request $request)
     {
         $this->authorize('viewAny', Reservation::class);
-
-        $user = auth()->user();
         $query = Reservation::with(['user', 'vehicle', 'trip', 'tenant']);
 
         if ($request->has('status')) {

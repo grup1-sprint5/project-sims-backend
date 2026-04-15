@@ -5,11 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\Reservation;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\WalletTopupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class StripeWebhookController extends Controller
 {
+    public function __construct(private readonly WalletTopupService $walletTopupService)
+    {
+    }
+
     public function handle(Request $request)
     {
         $payload = $request->getContent();
@@ -121,12 +126,13 @@ class StripeWebhookController extends Controller
             return response()->json(['received' => true]);
         }
 
-        $currentBalance = (float) ($user->wallet_balance ?? 0);
-        $topupAmount = round($amountCents / 100, 2);
-
-        $user->update([
-            'wallet_balance' => round($currentBalance + $topupAmount, 2),
-        ]);
+        $this->walletTopupService->applyTopup(
+            $user,
+            (string) ($object['id'] ?? ''),
+            is_string($object['payment_intent'] ?? null) ? (string) $object['payment_intent'] : null,
+            $amountCents,
+            (string) ($object['currency'] ?? 'eur')
+        );
 
         tenancy()->end();
 
