@@ -33,7 +33,8 @@ class CentralAuthController extends Controller
                 'password' => ['required', 'string'],
             ]);
 
-            $organization = strtolower(trim((string) $validated['organization']));
+            $organizationRaw = strtolower(trim((string) $validated['organization']));
+            $organizationSlug = Str::slug($organizationRaw);
 
             // Use explicit central connection to avoid issues if tenancy was already partially initialized.
             // Support both schemas:
@@ -48,23 +49,32 @@ class CentralAuthController extends Controller
             }
 
             $tenantQuery = Tenant::on($centralConnection)
-                ->whereRaw('LOWER(name) = ?', [$organization]);
+                ->whereRaw('LOWER(name) = ?', [$organizationRaw]);
 
             if ($hasSlugColumn) {
-                $tenantQuery->orWhereRaw('LOWER(slug) = ?', [$organization]);
+                $tenantQuery->orWhereRaw('LOWER(slug) = ?', [$organizationRaw]);
+                if ($organizationSlug !== '' && $organizationSlug !== $organizationRaw) {
+                    $tenantQuery->orWhereRaw('LOWER(slug) = ?', [$organizationSlug]);
+                }
             }
 
-            $idIsNumeric = in_array($idColumnType, ['integer', 'bigint', 'smallint', 'tinyint'], true);
-            $idIsString = in_array($idColumnType, ['string', 'text', 'char', 'uuid'], true);
+            $idType = strtolower((string) ($idColumnType ?? ''));
+            $idIsNumeric = preg_match('/(tinyint|smallint|mediumint|bigint|integer|int|serial)/', $idType) === 1;
+            $idIsStringLike = $idType === ''
+                || str_contains($idType, 'char')
+                || in_array($idType, ['string', 'text', 'uuid'], true);
 
             if ($idIsNumeric) {
-                if (ctype_digit($organization)) {
-                    $tenantQuery->orWhere('id', (int) $organization);
+                if (ctype_digit($organizationRaw)) {
+                    $tenantQuery->orWhere('id', (int) $organizationRaw);
                 }
             } else {
-                // Default to text comparison when type is unknown or string-like.
-                if ($idIsString || $idColumnType === null) {
-                    $tenantQuery->orWhere('id', $organization);
+                // Compare with id as text for string-like/unknown id columns (e.g. varchar, uuid).
+                if ($idIsStringLike) {
+                    $tenantQuery->orWhereRaw('LOWER(CAST(id AS TEXT)) = ?', [$organizationRaw]);
+                    if ($organizationSlug !== '' && $organizationSlug !== $organizationRaw) {
+                        $tenantQuery->orWhereRaw('LOWER(CAST(id AS TEXT)) = ?', [$organizationSlug]);
+                    }
                 }
             }
 
