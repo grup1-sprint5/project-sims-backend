@@ -90,6 +90,7 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
             // Reservations – admin operations
             Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('reservations', [AdminReservationController::class, 'index'])->name('reservations.index');
+                Route::get('reservations/revenue-summary', [AdminReservationController::class, 'revenueSummary'])->name('reservations.revenue-summary');
                 Route::get('reservations/{id}', [AdminReservationController::class, 'show'])->name('reservations.show');
                 Route::put('reservations/{id}', [AdminReservationController::class, 'update'])->name('reservations.update');
                 Route::delete('reservations/{id}', [AdminReservationController::class, 'destroy'])->name('reservations.destroy');
