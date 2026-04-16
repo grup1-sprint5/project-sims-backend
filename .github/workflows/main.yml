@@ -10,13 +10,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # (Opcional pero muy útil) Diagnóstico de conectividad
+      - name: Debug connectivity to SSH port
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y netcat-openbsd
+          echo "Checking ${{ secrets.DEPLOY_HOST_IP }}:${{ secrets.DEPLOY_SSH_PORT }}"
+          nc -vz ${{ secrets.DEPLOY_HOST_IP }} ${{ secrets.DEPLOY_SSH_PORT }}
+
       - name: Upload Files (SCP)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST_IP }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: 1303
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
           source: "./*"
           target: "/var/www/sims-back"
           rm: true
@@ -27,7 +35,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST_IP }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: 1303
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
           script: |
             cd /var/www/sims-back
             sudo chown -R jordiarnau:jordiarnau /var/www/sims-back
