@@ -1,5 +1,4 @@
-name: Deploy SIMS Production
-
+name: Deploy Backend
 on:
   push:
     branches: [ develop ]
@@ -11,19 +10,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Deploy to VPS via SSH
-        uses: appleboy/ssh-action@master
+      - name: Upload Files (SCP)
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST_IP }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          port: 1303
+          source: "./*"
+          target: "/var/www/sims-back"
+          rm: true
+
+      - name: Execute Remote Commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 1303
           script: |
             cd /var/www/sims-back
-            git fetch origin develop
-            git reset --hard origin/develop
-            docker compose down
-            docker compose up -d --build
-            sleep 15
-            docker compose exec -T app php artisan migrate --force
-            docker compose exec -T app php artisan config:cache
+            sudo chown -R jordiarnau:jordiarnau /var/www/sims-back
+            sudo systemctl reload nginx
