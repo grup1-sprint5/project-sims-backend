@@ -11,13 +11,11 @@ jobs:
         uses: actions/checkout@v3
 
       # (Opcional pero muy útil) Diagnóstico de conectividad
-      - name: Debug connectivity to SSH port
-        continue-on-error: true
+      - name: Check SSH port reachable
         run: |
           sudo apt-get update
           sudo apt-get install -y netcat-openbsd
-          echo "Checking ${{ secrets.DEPLOY_HOST_IP }}:${{ secrets.DEPLOY_SSH_PORT }}"
-          nc -vz ${{ secrets.DEPLOY_HOST_IP }} ${{ secrets.DEPLOY_SSH_PORT }}
+          nc -vz ${{ secrets.DEPLOY_HOST_IP }} 1303
 
       - name: Upload Files (SCP)
         uses: appleboy/scp-action@v0.1.7
