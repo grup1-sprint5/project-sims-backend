@@ -12,6 +12,7 @@ jobs:
 
       # (Opcional pero muy útil) Diagnóstico de conectividad
       - name: Debug connectivity to SSH port
+        continue-on-error: true
         run: |
           sudo apt-get update
           sudo apt-get install -y netcat-openbsd
@@ -24,7 +25,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST_IP }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          port: 1303
           source: "./*"
           target: "/var/www/sims-back"
           rm: true
