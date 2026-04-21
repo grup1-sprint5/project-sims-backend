@@ -42,7 +42,7 @@ class TenancyAutoSeedingTest extends TestCase
             $this->assertContains('SuperAdmin', $roles);
             $this->assertContains('TenantAdmin', $roles);
             $this->assertContains('Client', $roles);
-            $this->assertContains('Maintenance', $roles);
+            $this->assertContains('TenantWorker', $roles);
 
             // Verify permissions exist in tenant schema
             $permissionsCount = \Spatie\Permission\Models\Permission::count();

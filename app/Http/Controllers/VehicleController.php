@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Tenant;
 use App\Models\Vehicle;
 use App\Http\Requests\Vehicle\StoreVehicleRequest;
 use App\Http\Requests\Vehicle\UpdateVehicleRequest;
 use App\Services\VehicleLocationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class VehicleController extends Controller
 {
@@ -30,6 +32,11 @@ class VehicleController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
+
+        $globalViewRequested = filter_var($request->input('global'), FILTER_VALIDATE_BOOLEAN);
+        if ($user && $user->isSuperAdmin() && $globalViewRequested) {
+            return $this->indexForSuperAdmin($request);
+        }
         
         $query = Vehicle::query();
 
@@ -88,6 +95,110 @@ class VehicleController extends Controller
         });
 
         return response()->json($vehicles);
+    }
+
+    private function indexForSuperAdmin(Request $request): JsonResponse
+    {
+        $originalTenant = function_exists('tenant') ? tenant() : null;
+        $rows = collect();
+
+        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
+        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
+
+        $tenantsQuery = Tenant::query()->where('active', true);
+        if ($hasSlugColumn) {
+            $tenantsQuery->where('slug', '!=', 'central');
+        } else {
+            $tenantsQuery->where('id', '!=', 'central');
+        }
+
+        $tenants = $tenantsQuery->get();
+
+        foreach ($tenants as $tenant) {
+            if (!$tenant instanceof Tenant) {
+                continue;
+            }
+
+            tenancy()->initialize($tenant);
+
+            $query = Vehicle::query();
+
+            if ($request->filled('search')) {
+                $search = $request->input('search');
+                $query->where(function ($q) use ($search) {
+                    $q->where('license_plate', 'ILIKE', "%{$search}%")
+                        ->orWhere('brand', 'ILIKE', "%{$search}%")
+                        ->orWhere('model', 'ILIKE', "%{$search}%");
+                });
+            }
+
+            if ($request->filled('license_plate')) {
+                $query->where('license_plate', 'ILIKE', "%{$request->input('license_plate')}%");
+            }
+
+            if ($request->filled('brand')) {
+                $query->where('brand', 'ILIKE', "%{$request->input('brand')}%");
+            }
+
+            if ($request->filled('model')) {
+                $query->where('model', 'ILIKE', "%{$request->input('model')}%");
+            }
+
+            if ($request->has('active')) {
+                $query->where('active', filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN));
+            }
+
+            $tenantVehicles = $query
+                ->withCount([
+                    'reservations as active_reservations_count' => function ($q) {
+                        $q->whereIn('status', ['pending', 'active', 'confirmed']);
+                    }
+                ])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            $locations = $this->locationService->getLocations();
+
+            $mapped = $tenantVehicles->map(function ($vehicle) use ($locations, $tenant) {
+                $location = $locations[$vehicle->license_plate] ?? null;
+                $hasActiveReservation = ((int) ($vehicle->active_reservations_count ?? 0)) > 0;
+                $mongoRunning = $hasActiveReservation && (($location['active'] ?? false) === true);
+                $effectiveStatus = $mongoRunning ? 'running' : ($hasActiveReservation ? 'occupied' : 'available');
+
+                return [
+                    'id' => $vehicle->id,
+                    'tenant_id' => $tenant->id,
+                    'tenant' => [
+                        'id' => $tenant->id,
+                        'name' => $tenant->name,
+                    ],
+                    'license_plate' => $vehicle->license_plate,
+                    'brand' => $vehicle->brand,
+                    'model' => $vehicle->model,
+                    'active' => (bool) $vehicle->active,
+                    'active_reservations_count' => (int) ($vehicle->active_reservations_count ?? 0),
+                    'latitude' => $location['latitude'] ?? null,
+                    'longitude' => $location['longitude'] ?? null,
+                    'mongo_active' => $mongoRunning,
+                    'postgres_active' => $hasActiveReservation,
+                    'status' => $effectiveStatus,
+                    'created_at' => $vehicle->created_at?->toIso8601String(),
+                    'updated_at' => $vehicle->updated_at?->toIso8601String(),
+                ];
+            });
+
+            $rows = $rows->concat($mapped);
+        }
+
+        if ($originalTenant) {
+            tenancy()->initialize($originalTenant);
+        } else {
+            tenancy()->end();
+        }
+
+        return response()->json([
+            'data' => $rows->sortByDesc('created_at')->values(),
+        ]);
     }
 
     /**

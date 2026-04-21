@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
@@ -24,10 +25,10 @@ class UserController extends Controller
         $this->authorize('viewAny', User::class);
 
         $authUser = auth()->user();
-        $currentTenant = function_exists('tenant') ? tenant()?->id : null;
+        $globalViewRequested = filter_var($request->input('global'), FILTER_VALIDATE_BOOLEAN);
 
-        // SuperAdmin accessing from "central" tenant sees all users from all other tenants
-        if ($authUser && $authUser->isSuperAdmin() && $currentTenant === 'central') {
+        // SuperAdmin can explicitly request a global cross-tenant view.
+        if ($authUser && $authUser->isSuperAdmin() && $globalViewRequested) {
             return $this->indexForSuperAdmin($request);
         }
 
@@ -61,10 +62,24 @@ class UserController extends Controller
         $originalTenant = function_exists('tenant') ? tenant() : null;
         $rows = collect();
 
-        // Get all active tenants EXCEPT the "central" tenant (which is for SuperAdmin)
-        $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
+        // Get all active tenants except the central one.
+        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
+        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
+
+        $tenantsQuery = Tenant::query()->where('active', true);
+        if ($hasSlugColumn) {
+            $tenantsQuery->where('slug', '!=', 'central');
+        } else {
+            $tenantsQuery->where('id', '!=', 'central');
+        }
+
+        $tenants = $tenantsQuery->get();
 
         foreach ($tenants as $tenant) {
+            if (!$tenant instanceof Tenant) {
+                continue;
+            }
+
             tenancy()->initialize($tenant);
 
             $query = User::with('roles');

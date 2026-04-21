@@ -105,7 +105,18 @@ class TenantController extends Controller
     {
         $this->authorize('update', $tenant);
 
-        $tenant->update($request->validated());
+        $data = $request->validated();
+        $user = auth()->user();
+
+        // Tenant admins can only update operational fields.
+        if (!$user->isSuperAdmin()) {
+            $allowedFields = ['name', 'phone', 'address'];
+            $data = array_intersect_key($data, array_flip($allowedFields));
+        }
+
+        if (!empty($data)) {
+            $tenant->update($data);
+        }
 
         return response()->json([
             'message' => 'Tenant actualizado correctamente',

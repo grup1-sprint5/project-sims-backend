@@ -13,11 +13,14 @@ class RolesSeeder extends Seeder
      */
     public function run(): void
     {
+        // Legacy cleanup: this role was renamed to TenantWorker.
+        Role::where('name', 'Maintenance')->delete();
+
         // Create core roles
         $superAdminRole = Role::firstOrCreate(['name' => 'SuperAdmin', 'guard_name' => 'web']);
         $tenantAdminRole = Role::firstOrCreate(['name' => 'TenantAdmin', 'guard_name' => 'web']);
+        $tenantWorkerRole = Role::firstOrCreate(['name' => 'TenantWorker', 'guard_name' => 'web']);
         $clientRole = Role::firstOrCreate(['name' => 'Client', 'guard_name' => 'web']);
-        $maintenanceRole = Role::firstOrCreate(['name' => 'Maintenance', 'guard_name' => 'web']);
 
         // SuperAdmin: Full access to all permissions (cross-tenant)
         $superAdminRole->syncPermissions(Permission::all());
@@ -27,6 +30,7 @@ class RolesSeeder extends Seeder
             'users.view',
             'users.manage',
             'roles.view',
+            'roles.manage',
             'vehicles.view',
             'vehicles.manage',
             'tickets.view',
@@ -34,6 +38,16 @@ class RolesSeeder extends Seeder
             'reservations.view',
             'reservations.manage',
             'tenants.view',
+        ]);
+
+        // TenantWorker: operational role inside own tenant
+        $tenantWorkerRole->syncPermissions([
+            'vehicles.view',
+            'vehicles.manage',
+            'tickets.view',
+            'tickets.manage',
+            'reservations.view',
+            'reservations.manage',
         ]);
 
         // Client: Limited permissions
@@ -46,11 +60,5 @@ class RolesSeeder extends Seeder
             'reservations.manage',
         ]);
 
-        // Maintenance: Vehicle management
-        // Can view and manage vehicles (maintenance, repairs, etc.)
-        $maintenanceRole->syncPermissions([
-            'vehicles.view',
-            'vehicles.manage',
-        ]);
     }
 }

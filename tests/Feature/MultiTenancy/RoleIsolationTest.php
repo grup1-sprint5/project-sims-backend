@@ -59,7 +59,7 @@ class RoleIsolationTest extends TestCase
         // Sees system roles (except SuperAdmin)
         $this->assertTrue($names->contains('TenantAdmin'));
         $this->assertTrue($names->contains('Client'));
-        $this->assertTrue($names->contains('Maintenance'));
+        $this->assertTrue($names->contains('TenantWorker'));
 
         // Sees own custom role
         $this->assertTrue($names->contains('CustomRole_SIMS'));

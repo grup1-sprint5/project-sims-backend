@@ -9,7 +9,6 @@ use App\Http\Middleware\CheckTenantActive;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\AuthExchangeController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\TicketController;
@@ -18,16 +17,13 @@ use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\AdminReservationController;
 use App\Http\Controllers\WalletController;
 use App\Http\Controllers\TenantController;
-use App\Http\Controllers\TenantDomainController;
 
 /*
 |--------------------------------------------------------------------------
 | Tenant Routes
 |--------------------------------------------------------------------------
 |
-| Tenancy is initialized via two strategies (in order):
-|   1. Request Host matched in the `domains` table (domain/subdomain routing)
-|   2. X-Tenant: {slug} request header (API header routing)
+| Tenancy is initialized via X-Tenant: {slug} request header (API header routing).
 |
 */
 
@@ -36,7 +32,6 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
     ->group(function () {
 
         Route::post('/login', [AuthController::class, 'login'])->name('tenant.login');
-        Route::post('/auth/exchange-token', [AuthExchangeController::class, 'exchange'])->name('tenant.exchange');
         Route::post('/users', [UserController::class, 'store']); // Public registration
 
         Route::middleware('auth.tenant-token')->group(function () {
@@ -65,11 +60,6 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
             // Tenants (admins manage their own tenant; SuperAdmin manages all)
             Route::apiResource('tenants', TenantController::class);
             Route::patch('tenants/{tenant}/toggle-active', [TenantController::class, 'toggleActive']);
-
-            // Tenant domains (SuperAdmin assigns custom domains to tenants)
-            Route::get('tenants/{tenant}/domains', [TenantDomainController::class, 'index']);
-            Route::post('tenants/{tenant}/domains', [TenantDomainController::class, 'store']);
-            Route::delete('tenants/{tenant}/domains/{domain}', [TenantDomainController::class, 'destroy']);
 
             // Reservations – user operations
             Route::get('reservations', [ReservationController::class, 'index']);

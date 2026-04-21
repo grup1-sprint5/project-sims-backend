@@ -11,20 +11,21 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 
 class ReservationController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $this->authorize('viewAny', Reservation::class);
 
         $user = Auth::user();
-        $currentTenant = function_exists('tenant') ? tenant()?->id : null;
+        $globalViewRequested = filter_var($request->input('global'), FILTER_VALIDATE_BOOLEAN);
 
         // Admin/Manager can see reservations (scoped by tenant via global scope)
         if ($user->hasPermissionTo('reservations.manage')) {
-            // SuperAdmin accessing from "central" tenant sees all reservations from all other tenants
-            if ($user->isSuperAdmin() && $currentTenant === 'central') {
+            // SuperAdmin can explicitly request a global cross-tenant view.
+            if ($user->isSuperAdmin() && $globalViewRequested) {
                 return $this->indexForSuperAdmin();
             }
 
@@ -44,16 +45,30 @@ class ReservationController extends Controller
         $originalTenant = function_exists('tenant') ? tenant() : null;
         $rows = collect();
 
-        // Get all active tenants EXCEPT the "central" tenant (which is for SuperAdmin)
-        $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
+        // Get all active tenants except the central one.
+        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
+        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
+
+        $tenantsQuery = Tenant::query()->where('active', true);
+        if ($hasSlugColumn) {
+            $tenantsQuery->where('slug', '!=', 'central');
+        } else {
+            $tenantsQuery->where('id', '!=', 'central');
+        }
+
+        $tenants = $tenantsQuery->get();
 
         foreach ($tenants as $tenant) {
+            if (!$tenant instanceof Tenant) {
+                continue;
+            }
+
             tenancy()->initialize($tenant);
 
             $tenantReservations = Reservation::with(['user', 'vehicle', 'trip'])
                 ->orderBy('scheduled_start', 'desc')
                 ->get()
-                ->map(function ($reservation) use ($tenant) {
+                ->map(function (Reservation $reservation) use ($tenant) {
                     $data = $reservation->toArray();
                     $data['tenant_id'] = $tenant->id;
                     $data['tenant'] = [

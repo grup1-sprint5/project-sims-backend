@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Stancl\Tenancy\Database\Models\Domain;
 
 class TenantsSeeder extends Seeder
 {
@@ -70,25 +69,6 @@ class TenantsSeeder extends Seeder
             DB::table('tenants')
                 ->where('id', $payload['id'])
                 ->update(['data' => json_encode($newData)]);
-
-            // Domain identification logic
-            $host = parse_url(config('app.url'), PHP_URL_HOST) ?: 'localhost';
-            $baseDomain = ($host === 'localhost' || $host === '127.0.0.1') ? 'localhost' : $host;
-            
-            // Priority: 1. Hardcoded custom domain, 2. Dynamic subdomain (slug.base)
-            $domainName = $tenant['custom_domain'] ?? ($tenant['slug'] . '.' . $baseDomain);
-
-            // Register the domain if it's NOT a naked .ondigitalocean.app (shared host)
-            // But ALLOW if it's under our new custom domain grup1-sims.com
-            $isGenericDO = str_contains($domainName, 'ondigitalocean.app') && !str_contains($domainName, 'grup1-sims.com');
-
-            if (!$isGenericDO || ($tenant['custom_domain'] ?? false)) {
-                Domain::updateOrCreate([
-                    'domain' => $domainName,
-                ], [
-                    'tenant_id' => $payload['id'],
-                ]);
-            }
         }
     }
 }

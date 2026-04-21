@@ -10,7 +10,7 @@ class RolePolicy
     /**
      * System roles that cannot be modified or deleted.
      */
-    private const PROTECTED_ROLES = ['SuperAdmin', 'TenantAdmin', 'Client', 'Maintenance'];
+    private const PROTECTED_ROLES = ['SuperAdmin', 'TenantAdmin', 'TenantWorker', 'Client'];
 
     /**
      * Safely checks a permission, returning false instead of throwing.

@@ -13,22 +13,18 @@ Aquestes rutes no depenen d’un tenant concret.
 
 Inclouen:
 
-- autenticació tenant (`/login`, `/auth/exchange-token`, `/logout`, `/user`),
+- autenticació tenant (`/login`, `/logout`, `/user`) + login central (`/central/login`),
 - mòduls de negoci (`users`, `roles`, `vehicles`, `tickets`, `reservations`, `tenants`, etc.),
 - subrutes admin de reserves (`/api/admin/reservations/...`).
 
 ## Model d’autenticació
 
-## Fase 1: Login central (opcional)
+## Login central (recomanat en single-domain)
 
 - l’usuari indica `organization`, `email`, `password`.
-- el sistema valida tenant i credencials.
-- retorna un `exchange_token` curt per completar login al domini del tenant.
-
-## Fase 2: Exchange token al tenant
-
-- `POST /api/auth/exchange-token`
-- retorna Bearer token amb habilitat `tenant:<id>`.
+- `organization` és opcional: si no s’envia, el backend intenta resoldre tenant per credencials.
+- si hi ha més d’una coincidència, retorna `409` amb error `organization_required`.
+- en èxit retorna token Bearer final + `tenant_id` + dades d’usuari.
 
 ## Login directe tenant
 

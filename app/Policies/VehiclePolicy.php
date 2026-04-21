@@ -29,7 +29,7 @@ class VehiclePolicy
 
     /**
      * Determine if the user can create a new vehicle.
-     * Only users with 'vehicles.manage' permission (Admin, Maintenance).
+     * Only users with 'vehicles.manage' permission (Admin, TenantWorker).
      */
     public function create(User $user): bool
     {

@@ -10,8 +10,8 @@ use App\Models\User;
 
 $users = [
     'superadmin' => User::role('SuperAdmin')->first(),
-    'client' => User::role('client')->first(),
-    'maintenance' => User::role('maintenance')->first(),
+    'client' => User::role('Client')->first(),
+    'tenantworker' => User::role('TenantWorker')->first(),
 ];
 
 foreach ($users as $role => $user) {

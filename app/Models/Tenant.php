@@ -14,9 +14,9 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     use HasFactory, SoftDeletes, HasDatabase, HasDomains;
 
     /**
-     * The tenant `id` IS the slug (human-readable, unique identifier).
-     * stancl/tenancy uses string primary keys by default – no changes needed.
-     * The schema name will be: "tenant_" + id (configured via tenancy.database.prefix).
+     * Legacy compatibility note:
+     * - Newer schema may use string id as tenant key.
+     * - Legacy schema can use numeric id + string slug as tenant key.
      */
 
     /**
@@ -25,13 +25,14 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     public static function getCustomColumns(): array
     {
         return [
-            'id', 'name', 'tax_id', 'email', 'phone', 'address', 'active',
+            'id', 'slug', 'name', 'tax_id', 'email', 'phone', 'address', 'active',
             'deleted_at', 'created_at', 'updated_at',
         ];
     }
 
     protected $fillable = [
-        'id',      // The slug – must be provided explicitly on create
+        'id',
+        'slug',
         'name',
         'tax_id',
         'email',
@@ -49,7 +50,19 @@ class Tenant extends BaseTenant implements TenantWithDatabase
      */
     public function getSlugAttribute(): string
     {
-        return $this->id;
+        return (string) ($this->attributes['slug'] ?? $this->id);
+    }
+
+    /**
+     * Compatibility for legacy central schemas where id is numeric and slug stores tenant key.
+     */
+    public function getTenantKey(): string
+    {
+        if (!empty($this->attributes['slug'])) {
+            return (string) $this->attributes['slug'];
+        }
+
+        return (string) parent::getTenantKey();
     }
 }
 

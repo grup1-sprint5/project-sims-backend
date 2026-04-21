@@ -24,7 +24,7 @@ class TenantPolicy
     {
         if (!$user->hasPermissionTo('tenants.view')) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $user->tenant_id === $tenant->id;
+        return $this->belongsToTenant($user, $tenant);
     }
 
     /**
@@ -48,11 +48,20 @@ class TenantPolicy
         }
 
         // TenantAdmin can edit their own tenant
-        if ($user->isTenantAdmin() && $user->tenant_id === $tenant->id) {
+        if ($user->isTenantAdmin() && $this->belongsToTenant($user, $tenant)) {
             return true;
         }
 
         return false;
+    }
+
+    private function belongsToTenant(User $user, Tenant $tenant): bool
+    {
+        $userTenant = (string) ($user->tenant_id ?? '');
+        $tenantId = (string) $tenant->id;
+        $tenantSlug = (string) ($tenant->slug ?? '');
+
+        return $userTenant !== '' && ($userTenant === $tenantId || ($tenantSlug !== '' && $userTenant === $tenantSlug));
     }
 
     /**

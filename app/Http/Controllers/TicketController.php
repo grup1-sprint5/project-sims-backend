@@ -8,6 +8,7 @@ use App\Http\Resources\TicketResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Handles ticket CRUD operations.
@@ -21,15 +22,15 @@ class TicketController extends Controller
      * Admin: all tickets with user info.
      * Client: own tickets only.
      */
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
-        $currentTenant = function_exists('tenant') ? tenant()?->id : null;
+        $globalViewRequested = filter_var($request->input('global'), FILTER_VALIDATE_BOOLEAN);
 
         // Admin/Support sees tickets (scoped by tenant via global scope)
         if ($user->hasPermissionTo('tickets.manage')) {
-            // SuperAdmin accessing from "central" tenant sees all tickets from all other tenants
-            if ($user->isSuperAdmin() && $currentTenant === 'central') {
+            // SuperAdmin can explicitly request a global cross-tenant view.
+            if ($user->isSuperAdmin() && $globalViewRequested) {
                 return $this->indexForSuperAdmin();
             }
 
@@ -54,10 +55,24 @@ class TicketController extends Controller
         $originalTenant = function_exists('tenant') ? tenant() : null;
         $rows = collect();
 
-        // Get all active tenants EXCEPT the "central" tenant (which is for SuperAdmin)
-        $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
+        // Get all active tenants except the central one.
+        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
+        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
+
+        $tenantsQuery = Tenant::query()->where('active', true);
+        if ($hasSlugColumn) {
+            $tenantsQuery->where('slug', '!=', 'central');
+        } else {
+            $tenantsQuery->where('id', '!=', 'central');
+        }
+
+        $tenants = $tenantsQuery->get();
 
         foreach ($tenants as $tenant) {
+            if (!$tenant instanceof Tenant) {
+                continue;
+            }
+
             tenancy()->initialize($tenant);
 
             $tenantTickets = Ticket::with(['user', 'messages'])

@@ -4,10 +4,10 @@
 
 El sistema treballa principalment amb aquests rols:
 
-- **SuperAdmin:** visió global del sistema (i operacions cross-tenant en context central).
+- **SuperAdmin:** visió global del sistema (operacions cross-tenant quan activa mode global).
 - **TenantAdmin:** administra recursos de la seua empresa.
+- **TenantWorker:** gestió operativa de vehicles, tickets i reserves dins del tenant.
 - **Client:** reserva vehicles i gestiona els seus tickets/reserves.
-- **Maintenance:** gestió operativa de vehicles segons permisos assignats.
 
 ## Mòduls funcionals
 
@@ -31,7 +31,7 @@ Permet:
 - assignar permisos a rols,
 - editar/eliminar rols no protegits.
 
-Hi ha rols protegits del sistema (`SuperAdmin`, `TenantAdmin`, `Client`, `Maintenance`).
+Hi ha rols protegits del sistema (`SuperAdmin`, `TenantAdmin`, `TenantWorker`, `Client`).
 
 ## 2.3 Vehicles
 
@@ -72,9 +72,10 @@ Els clients normalment veuen les seues incidències; admin/gestors poden tindre 
 
 ## Flux A: Login i sessió
 
-- Login central (`/central/login`) per descobrir tenant i redirigir.
-- Exchange token (`/auth/exchange-token`) per obtenir token final al domini del tenant.
-- Login directe de tenant (`/login`) amb `X-Tenant`.
+- Login central (`/central/login`) amb `email/password` i `organization` opcional.
+- Si el compte existeix en diversos tenants, la API retorna `organization_required`.
+- En login correcte retorna token final + `tenant_id` (sense exchange token ni callback).
+- Les peticions autenticades usen `X-Tenant` per fixar context tenant.
 
 ## Flux B: Crear vehicle amb ubicació
 
