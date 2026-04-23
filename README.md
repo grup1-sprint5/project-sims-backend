@@ -112,6 +112,12 @@ Notes:
 
 The backend includes a scheduler that auto-cancels pending reservations after `activation_deadline`.
 
+Docker setup (recommended):
+
+```bash
+docker compose up -d scheduler
+```
+
 Production cron:
 
 ```bash

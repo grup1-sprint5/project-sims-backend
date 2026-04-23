@@ -21,6 +21,8 @@ class ReservationController extends Controller
         $user = Auth::user();
         $currentTenant = function_exists('tenant') ? tenant()?->id : null;
 
+        $this->expireOverduePendingReservations($user->hasPermissionTo('reservations.manage') ? null : $user->id);
+
         // Admin/Manager can see reservations (scoped by tenant via global scope)
         if ($user->hasPermissionTo('reservations.manage')) {
             // SuperAdmin accessing from "central" tenant sees all reservations from all other tenants
@@ -28,15 +30,18 @@ class ReservationController extends Controller
                 return $this->indexForSuperAdmin();
             }
 
-            $query = Reservation::with(['user', 'vehicle', 'trip', 'tenant'])
+            $reservations = Reservation::with(['user', 'vehicle', 'trip', 'tenant'])
                 ->orderBy('scheduled_start', 'desc');
-            return $query->get();
+
+            return $this->normalizeReservationCollectionForResponse($reservations->get());
         }
 
-        return Reservation::where('user_id', $user->id)
+        $reservations = Reservation::where('user_id', $user->id)
             ->with(['vehicle', 'trip'])
             ->orderBy('scheduled_start', 'desc')
             ->get();
+
+        return $this->normalizeReservationCollectionForResponse($reservations);
     }
 
     private function indexForSuperAdmin()
@@ -55,6 +60,7 @@ class ReservationController extends Controller
                 ->get()
                 ->map(function ($reservation) use ($tenant) {
                     $data = $reservation->toArray();
+                    $data = $this->normalizeReservationArrayForResponse($data);
                     $data['tenant_id'] = $tenant->id;
                     $data['tenant'] = [
                         'id' => $tenant->id,
@@ -175,12 +181,17 @@ class ReservationController extends Controller
     public function show(Reservation $reservation)
     {
         $this->authorize('view', $reservation);
-        return $reservation->load(['vehicle', 'trip']);
+
+        $this->expireReservationIfOverdue($reservation);
+
+        return $this->normalizeReservationForResponse($reservation->load(['vehicle', 'trip']));
     }
 
     public function activate(Request $request, Reservation $reservation)
     {
         $this->authorize('activate', $reservation);
+
+        $this->expireReservationIfOverdue($reservation);
 
         if ($reservation->status !== 'pending') {
             return response()->json(['message' => 'Reservation is not pending.'], 400);
@@ -190,8 +201,8 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Reservation must be paid before activation.'], 402);
         }
 
-        if (now()->greaterThan($reservation->activation_deadline)) {
-            $reservation->update(['status' => 'expired']);
+        if ($reservation->isPendingAndOverdue()) {
+            $reservation->markAsExpired();
             return response()->json(['message' => 'Reservation expired.'], 403);
         }
 
@@ -262,6 +273,8 @@ class ReservationController extends Controller
     public function createStripeCheckoutSession(Request $request, Reservation $reservation)
     {
         $this->authorize('view', $reservation);
+
+        $this->expireReservationIfOverdue($reservation);
 
         if ($reservation->status !== 'pending') {
             return response()->json(['message' => 'Only pending reservations can be paid.'], 400);
@@ -428,5 +441,57 @@ class ReservationController extends Controller
             'price_per_minute' => $pricePerMinute,
             'max_per_hour' => $maxPricePerHour,
         ];
+    }
+
+    private function expireOverduePendingReservations(?int $userId = null): int
+    {
+        $now = now();
+        $query = Reservation::pendingAndOverdue($now);
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->update([
+            'status' => 'expired',
+            'cancelled_at' => $now,
+        ]);
+    }
+
+    private function expireReservationIfOverdue(Reservation $reservation): void
+    {
+        if (!$reservation->isPendingAndOverdue()) {
+            return;
+        }
+
+        $reservation->markAsExpired();
+        $reservation->refresh();
+    }
+
+    private function normalizeReservationCollectionForResponse($reservations)
+    {
+        return $reservations->map(function (Reservation $reservation) {
+            return $this->normalizeReservationForResponse($reservation);
+        });
+    }
+
+    private function normalizeReservationForResponse(Reservation $reservation): Reservation
+    {
+        if ($reservation->scheduled_end === null) {
+            $reservation->setAttribute('scheduled_end', $reservation->activation_deadline ?? $reservation->scheduled_start);
+        }
+
+        return $reservation;
+    }
+
+    private function normalizeReservationArrayForResponse(array $reservation): array
+    {
+        if (($reservation['scheduled_end'] ?? null) !== null) {
+            return $reservation;
+        }
+
+        $reservation['scheduled_end'] = $reservation['activation_deadline'] ?? ($reservation['scheduled_start'] ?? null);
+
+        return $reservation;
     }
 }
