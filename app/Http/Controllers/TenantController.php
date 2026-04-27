@@ -8,6 +8,7 @@ use App\Http\Requests\Tenant\UpdateTenantRequest;
 use App\Http\Resources\TenantResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class TenantController extends Controller
 {
@@ -26,6 +27,8 @@ class TenantController extends Controller
         $this->authorize('viewAny', Tenant::class);
 
         $user = auth()->user();
+        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
+        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
 
         // TenantAdmin can only see their own tenant
         if (!$user->isSuperAdmin() && $user->tenant_id) {
@@ -39,9 +42,12 @@ class TenantController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
+            $query->where(function ($q) use ($search, $hasSlugColumn) {
                 $q->where('name', 'ILIKE', "%{$search}%")
                   ->orWhere('id', 'ILIKE', "%{$search}%")
+                  ->when($hasSlugColumn, function ($qq) use ($search) {
+                      $qq->orWhere('slug', 'ILIKE', "%{$search}%");
+                  })
                   ->orWhere('email', 'ILIKE', "%{$search}%")
                   ->orWhere('tax_id', 'ILIKE', "%{$search}%");
             });
@@ -74,9 +80,25 @@ class TenantController extends Controller
     {
         $this->authorize('create', Tenant::class);
 
-        $data       = $request->validated();
-        $data['id'] = $data['slug'];  // slug is the string primary key
-        unset($data['slug']);
+        $data = $request->validated();
+        $slug = (string) $data['slug'];
+
+        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
+        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
+        $idColumnType = strtolower((string) Schema::connection($centralConnection)->getColumnType('tenants', 'id'));
+        $idLooksNumeric = preg_match('/(tinyint|smallint|mediumint|bigint|integer|int|serial)/', $idColumnType) === 1;
+
+        if ($hasSlugColumn) {
+            $data['slug'] = $slug;
+
+            // Hybrid schema support: if id is string-like, keep id aligned with slug.
+            if (!$idLooksNumeric) {
+                $data['id'] = $slug;
+            }
+        } else {
+            $data['id'] = $slug;
+            unset($data['slug']);
+        }
 
         $tenant = Tenant::create($data);
 

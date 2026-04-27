@@ -16,7 +16,7 @@ class TenantResource extends JsonResource
     {
         return [
             'id'         => $this->id,
-            'slug'       => $this->id,   // backward-compat alias
+            'slug'       => $this->slug,   // backward-compat alias
             'name'       => $this->name,
             'tax_id'     => $this->tax_id,
             'email'      => $this->email,
