@@ -39,7 +39,6 @@ class CentralAuthController extends Controller
             if ($selectionError) {
                 return $selectionError;
             }
-
             if (!$tenant) {
                 throw ValidationException::withMessages([
                     'email' => ['Incorrect credentials.'],

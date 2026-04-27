@@ -18,6 +18,20 @@ services:
       - "8001:8001"
     command: ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8001"]
 
+  scheduler:
+    image: project-sims-backend_app
+    container_name: project_sims_scheduler
+    volumes:
+      - ./:/var/www/html
+      - vendor:/var/www/html/vendor
+    working_dir: /var/www/html
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - mongo
+    command: ["php", "artisan", "schedule:work"]
+
   db:
     image: postgres:15
     container_name: project_sims_db
