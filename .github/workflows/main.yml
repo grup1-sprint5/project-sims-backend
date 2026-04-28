@@ -17,6 +17,17 @@ jobs:
           sudo apt-get install -y netcat-openbsd
           nc -vz ${{ secrets.DEPLOY_HOST_IP }} 1303
 
+      - name: Prepare remote folder permissions
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 1303
+          script: |
+            sudo mkdir -p /var/www/sims-back
+            sudo chown -R ${{ secrets.DEPLOY_USER }}:${{ secrets.DEPLOY_USER }} /var/www/sims-back
+
       - name: Upload Files (SCP)
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -34,7 +45,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST_IP }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          port: 1303
           script: |
             cd /var/www/sims-back
             sudo chown -R jordiarnau:jordiarnau /var/www/sims-back
