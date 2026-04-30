@@ -29,6 +29,8 @@ class RolesSeeder extends Seeder
             'roles.view',
             'vehicles.view',
             'vehicles.manage',
+            'geofences.view',
+            'geofences.manage',
             'tickets.view',
             'tickets.manage',
             'reservations.view',
@@ -51,6 +53,7 @@ class RolesSeeder extends Seeder
         $maintenanceRole->syncPermissions([
             'vehicles.view',
             'vehicles.manage',
+            'geofences.view',
         ]);
     }
 }

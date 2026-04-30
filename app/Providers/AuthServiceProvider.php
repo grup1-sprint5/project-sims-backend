@@ -11,6 +11,8 @@ use App\Models\Ticket;
 use App\Models\Vehicle;
 use App\Models\Reservation;
 use App\Models\Tenant;
+use App\Models\Geofence;
+use App\Models\GeofenceEvent;
 use Spatie\Permission\Models\Role;
 
 // Policies
@@ -20,6 +22,8 @@ use App\Policies\VehiclePolicy;
 use App\Policies\ReservationPolicy;
 use App\Policies\RolePolicy;
 use App\Policies\TenantPolicy;
+use App\Policies\GeofencePolicy;
+use App\Policies\GeofenceEventPolicy;
 
 class AuthServiceProvider extends ServiceProvider
 {
@@ -35,6 +39,8 @@ class AuthServiceProvider extends ServiceProvider
         Reservation::class => ReservationPolicy::class,
         Role::class => RolePolicy::class,
         Tenant::class => TenantPolicy::class,
+        Geofence::class => GeofencePolicy::class,
+        GeofenceEvent::class => GeofenceEventPolicy::class,
     ];
 
     /**
