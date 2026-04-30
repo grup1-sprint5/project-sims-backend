@@ -34,6 +34,11 @@ class PermissionsSeeder extends Seeder
             'vehicles.manage',  // Create, Edit, Maintain
             'vehicles.delete',
 
+            // Geofences Module
+            'geofences.view',
+            'geofences.manage',
+            'geofences.delete',
+
             // Tickets Module
             'tickets.view',
             'tickets.manage',   // Create, Respond

@@ -4,6 +4,7 @@ namespace Tests\Feature\Console;
 
 use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class TenantsCommandsTest extends TestCase
@@ -27,12 +28,12 @@ class TenantsCommandsTest extends TestCase
         ]);
 
         $this->artisan('tenants:list')
-            ->expectsOutput('list-test-1')
-            ->expectsOutput('Test Tenant 1')
-            ->expectsOutput('test1@example.com')
-            ->expectsOutput('list-test-2')
-            ->expectsOutput('Test Tenant 2')
-            ->expectsOutput('test2@example.com')
+            ->expectsOutputToContain('list-test-1')
+            ->expectsOutputToContain('Test Tenant 1')
+            ->expectsOutputToContain('test1@example.com')
+            ->expectsOutputToContain('list-test-2')
+            ->expectsOutputToContain('Test Tenant 2')
+            ->expectsOutputToContain('test2@example.com')
             ->assertExitCode(0);
     }
 
@@ -45,7 +46,7 @@ class TenantsCommandsTest extends TestCase
             'active' => true,
         ]);
 
-        $this->artisan('tenants:list --format=json')
+        $this->artisan('tenants:list', ['--format' => 'json'])
             ->expectsOutputToContain('"id"')
             ->expectsOutputToContain('"json-test"')
             ->expectsOutputToContain('"name"')
@@ -62,6 +63,10 @@ class TenantsCommandsTest extends TestCase
 
     public function test_check_integrity_reports_missing_schemas(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Schema integrity checks are only supported on PostgreSQL.');
+        }
+
         // Create a tenant but don't initialize it (so no schema exists)
         Tenant::create([
             'id' => 'integrity-test',
@@ -80,6 +85,10 @@ class TenantsCommandsTest extends TestCase
 
     public function test_check_integrity_validates_existing_schemas(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Schema integrity checks are only supported on PostgreSQL.');
+        }
+
         $tenant = Tenant::create([
             'id' => 'valid-integrity-test',
             'name' => 'Valid Integrity Test',

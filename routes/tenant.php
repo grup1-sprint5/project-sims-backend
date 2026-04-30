@@ -17,6 +17,10 @@ use App\Http\Controllers\TicketMessageController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\AdminReservationController;
 use App\Http\Controllers\WalletController;
+use App\Http\Controllers\Api\GeofenceController;
+use App\Http\Controllers\Api\GeofenceAssignmentController;
+use App\Http\Controllers\Api\GeofenceEventController;
+use App\Http\Controllers\Api\VehiclePositionController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\TenantDomainController;
 
@@ -56,6 +60,13 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
             Route::apiResource('vehicles', VehicleController::class);
             Route::get('vehicles-map', [VehicleController::class, 'map']);
             Route::get('vehicles-map-admin', [VehicleController::class, 'adminMap']);
+
+            // Geofencing
+            Route::apiResource('geofences', GeofenceController::class);
+            Route::post('geofences/{geofence}/assignments', [GeofenceAssignmentController::class, 'store']);
+            Route::delete('geofences/{geofence}/assignments/{assignmentId}', [GeofenceAssignmentController::class, 'destroy']);
+            Route::get('geofence-events', [GeofenceEventController::class, 'index']);
+            Route::post('vehicle-positions', [VehiclePositionController::class, 'store'])->middleware('throttle:120,1');
 
             // Tickets
             Route::apiResource('tickets', TicketController::class);
