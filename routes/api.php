@@ -26,6 +26,9 @@ use App\Http\Controllers\TenantRequestController;
 
 Route::post('/register-company', [TenantRequestController::class, 'store']);
 
+// Slug availability check
+Route::get('/tenant-slugs/check', [TenantRequestController::class, 'checkSlug']);
+
 // Admin endpoints for tenant requests (require auth + superadmin)
 Route::middleware(['auth:sanctum'])->group(function () {
 	Route::get('/tenant-requests', [TenantRequestController::class, 'index']);

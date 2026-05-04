@@ -119,4 +119,33 @@ class TenantRequestController extends Controller
 
         return response()->json(['message' => 'Approved', 'tenant' => $tenant, 'domain' => $domain]);
     }
+
+    // Public: check if a slug is available (not used by Tenant or pending request)
+    public function checkSlug(Request $request)
+    {
+        $slug = $request->query('slug');
+        if (!is_string($slug) || trim($slug) === '') {
+            return response()->json(['available' => false, 'message' => 'Missing slug'], 400);
+        }
+
+        $slug = trim($slug);
+
+        // Simple format validation
+        if (!preg_match('/^[a-z0-9\-]+$/', $slug)) {
+            return response()->json(['available' => false, 'message' => 'Invalid slug format']);
+        }
+
+        $existsTenant = \App\Models\Tenant::find($slug) !== null;
+        $existsRequest = TenantRequest::where('slug', $slug)->exists();
+
+        if ($existsTenant) {
+            return response()->json(['available' => false, 'message' => 'Slug already used by an existing tenant']);
+        }
+
+        if ($existsRequest) {
+            return response()->json(['available' => false, 'message' => 'Slug already requested and pending']);
+        }
+
+        return response()->json(['available' => true, 'message' => 'Slug is available']);
+    }
 }
