@@ -45,6 +45,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // System-wide admin routes (all data from all tenants)
     Route::get('/vehicles', [AdminSystemController::class, 'vehicles']);
     Route::get('/reservations', [AdminSystemController::class, 'reservations']);
+    Route::get('/admin/reservations', [AdminSystemController::class, 'reservations']); // alias for superadmin dashboard
     Route::get('/bookings', [AdminSystemController::class, 'reservations']); // alias for reservations
     Route::get('/geofences', [AdminSystemController::class, 'geofences']);
     Route::get('/geofence-events', [AdminSystemController::class, 'geofenceEvents']);

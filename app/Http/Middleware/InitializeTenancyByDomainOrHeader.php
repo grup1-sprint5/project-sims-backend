@@ -28,6 +28,11 @@ class InitializeTenancyByDomainOrHeader
             ?? $request->query(config('tenancy.identification.querystring'));
 
         if ($tenantKey) {
+            // Bypass initialization for "central" context
+            if ($tenantKey === 'central') {
+                return $next($request);
+            }
+
             $tenantModel = config('tenancy.tenant_model');
             $tenant = $tenantModel::find($tenantKey);
 
@@ -47,8 +52,8 @@ class InitializeTenancyByDomainOrHeader
                     if ($request->expectsJson() || $request->is('api/*')) {
                         return response()->json([
                             'message' => $looksLikeMissingTenantDatabase
-                                ? 'Tenant database is not initialized on the server.'
-                                : 'Tenant initialization failed.',
+                                ? 'Tenant database is not initialized on the server. ' . $e->getMessage()
+                                : 'Tenant initialization failed: ' . $e->getMessage(),
                             'error' => $looksLikeMissingTenantDatabase
                                 ? 'tenant_database_missing'
                                 : 'tenant_initialization_failed',
@@ -64,40 +69,56 @@ class InitializeTenancyByDomainOrHeader
 
         $host = $request->getHost();
 
-        // 2. Fall back to domain lookup
-        $domain = Domain::where('domain', $host)->first();
+        // Skip domain initialization for central domains
+        $centralDomains = [
+            'jordiarnau.iemhosting.asix2.iesmontsia.cat',
+            'jordiarnau.ieshosting.asix2.iesmontsia.cat',
+            'grup1-sims.com',
+            'www.grup1-sims.com',
+            'localhost',
+            '127.0.0.1'
+        ];
 
-        if ($domain) {
-            try {
-                tenancy()->initialize($domain->tenant);
-            } catch (Throwable $e) {
-                report($e);
+        if (!in_array($host, $centralDomains)) {
+            // 2. Fall back to domain lookup
+            $domain = Domain::where('domain', $host)->first();
 
-                $message = strtolower($e->getMessage());
-                $looksLikeMissingTenantDatabase = (
-                    (str_contains($message, 'schema') && str_contains($message, 'does not exist'))
-                    || str_contains($message, 'unknown database')
-                    || str_contains($message, 'database') && str_contains($message, 'does not exist')
-                );
+            if ($domain) {
+                try {
+                    tenancy()->initialize($domain->tenant);
+                } catch (Throwable $e) {
+                    report($e);
 
-                if ($request->expectsJson() || $request->is('api/*')) {
-                    return response()->json([
-                        'message' => $looksLikeMissingTenantDatabase
-                            ? 'Tenant database is not initialized on the server.'
-                            : 'Tenant initialization failed.',
-                        'error' => $looksLikeMissingTenantDatabase
-                            ? 'tenant_database_missing'
-                            : 'tenant_initialization_failed',
-                    ], $looksLikeMissingTenantDatabase ? 409 : 500);
+                    $message = strtolower($e->getMessage());
+                    $looksLikeMissingTenantDatabase = (
+                        (str_contains($message, 'schema') && str_contains($message, 'does not exist'))
+                        || str_contains($message, 'unknown database')
+                        || str_contains($message, 'database') && str_contains($message, 'does not exist')
+                    );
+
+                    if ($request->expectsJson() || $request->is('api/*')) {
+                        return response()->json([
+                            'message' => $looksLikeMissingTenantDatabase
+                                ? 'Tenant database is not initialized on the server. ' . $e->getMessage()
+                                : 'Tenant initialization failed: ' . $e->getMessage(),
+                            'error' => $looksLikeMissingTenantDatabase
+                                ? 'tenant_database_missing'
+                                : 'tenant_initialization_failed',
+                        ], $looksLikeMissingTenantDatabase ? 409 : 500);
+                    }
+
+                    throw $e;
                 }
 
-                throw $e;
+                return $next($request);
             }
+        }
 
+        // If we reached here, no tenant was identified
+        if (in_array($host, $centralDomains)) {
             return $next($request);
         }
 
-        // Neither strategy resolved a tenant.
         if ($request->expectsJson() || $request->is('api/*')) {
             return response()->json([
                 'message' => 'Tenant not identified. Provide X-Tenant header or use a registered tenant domain.',

@@ -31,6 +31,11 @@ class VehicleController extends Controller
     {
         $user = $request->user();
         
+        // SuperAdmins fetch across all tenants
+        if ($user && $user->isSuperAdmin() && (!function_exists('tenant') || !tenant())) {
+            return app(\App\Http\Controllers\Api\AdminSystemController::class)->vehicles($request);
+        }
+
         $query = Vehicle::query();
 
         // Búsqueda general por license_plate, brand o model

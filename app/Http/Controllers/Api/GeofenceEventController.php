@@ -13,6 +13,11 @@ class GeofenceEventController extends Controller
     {
         $this->authorize('viewAny', GeofenceEvent::class);
 
+        $user = $request->user();
+        if ($user && $user->isSuperAdmin() && (!function_exists('tenant') || !tenant())) {
+            return app(\App\Http\Controllers\Api\AdminSystemController::class)->geofenceEvents($request);
+        }
+
         $query = GeofenceEvent::query()
             ->with(['geofence:id,name', 'vehicle:id,license_plate'])
             ->when(!$request->user()->isSuperAdmin(), fn ($q) => $q->where('tenant_id', (string) $request->user()->tenant_id));

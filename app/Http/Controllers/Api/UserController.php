@@ -24,10 +24,9 @@ class UserController extends Controller
         $this->authorize('viewAny', User::class);
 
         $authUser = auth()->user();
-        $currentTenant = function_exists('tenant') ? tenant()?->id : null;
 
-        // SuperAdmin accessing from "central" tenant sees all users from all other tenants
-        if ($authUser && $authUser->isSuperAdmin() && $currentTenant === 'central') {
+        // SuperAdmin sees all users from all other tenants
+        if ($authUser && $authUser->isSuperAdmin()) {
             return $this->indexForSuperAdmin($request);
         }
 

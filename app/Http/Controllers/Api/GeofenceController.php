@@ -22,6 +22,11 @@ class GeofenceController extends Controller
 
         $user = $request->user();
 
+        // SuperAdmins fetch across all tenants
+        if ($user && $user->isSuperAdmin() && (!function_exists('tenant') || !tenant())) {
+            return app(\App\Http\Controllers\Api\AdminSystemController::class)->geofences($request);
+        }
+
         $query = Geofence::query()
             ->with('assignments')
             ->when(!$user->isSuperAdmin(), fn ($q) => $q->where('tenant_id', (string) $user->tenant_id));

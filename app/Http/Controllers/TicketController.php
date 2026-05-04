@@ -28,8 +28,8 @@ class TicketController extends Controller
 
         // Admin/Support sees tickets (scoped by tenant via global scope)
         if ($user->hasPermissionTo('tickets.manage')) {
-            // SuperAdmin accessing from "central" tenant sees all tickets from all other tenants
-            if ($user->isSuperAdmin() && $currentTenant === 'central') {
+            // SuperAdmin sees all tickets from all other tenants
+            if ($user->isSuperAdmin()) {
                 return $this->indexForSuperAdmin();
             }
 
@@ -58,7 +58,11 @@ class TicketController extends Controller
         $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
 
         foreach ($tenants as $tenant) {
-            tenancy()->initialize($tenant);
+            try {
+                tenancy()->initialize($tenant);
+            } catch (\Throwable $e) {
+                continue;
+            }
 
             $tenantTickets = Ticket::with(['user', 'messages'])
                 ->orderBy('created_at', 'desc')
