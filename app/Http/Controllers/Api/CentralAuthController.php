@@ -81,6 +81,10 @@ class CentralAuthController extends Controller
         }
     }
 
+    /**
+     * Authenticate from central domain and return tenant redirect metadata.
+     */
+    public function login(Request $request): JsonResponse
     {
         try {
             $centralConnection = (string) (config('tenancy.database.central_connection')
