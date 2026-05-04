@@ -36,10 +36,20 @@ Route::middleware(['auth:sanctum'])->get('/user', [AuthController::class, 'user'
 
 // Central admin data endpoints (for superadmin dashboard - NO tenancy middleware)
 use App\Http\Controllers\Api\CentralAdminController;
+use App\Http\Controllers\Api\AdminSystemController;
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/users', [CentralAdminController::class, 'users']);
     Route::get('/roles', [CentralAdminController::class, 'roles']);
     Route::get('/permissions', [CentralAdminController::class, 'permissions']);
+    
+    // System-wide admin routes (all data from all tenants)
+    Route::get('/vehicles', [AdminSystemController::class, 'vehicles']);
+    Route::get('/reservations', [AdminSystemController::class, 'reservations']);
+    Route::get('/bookings', [AdminSystemController::class, 'reservations']); // alias for reservations
+    Route::get('/geofences', [AdminSystemController::class, 'geofences']);
+    Route::get('/geofence-events', [AdminSystemController::class, 'geofenceEvents']);
+    Route::get('/tenants', [AdminSystemController::class, 'tenants']);
+    Route::get('/tickets', [AdminSystemController::class, 'tickets']);
 });
 
 // Admin endpoints for tenant requests (require auth + superadmin)

@@ -65,7 +65,11 @@ class UserController extends Controller
         $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
 
         foreach ($tenants as $tenant) {
-            tenancy()->initialize($tenant);
+            try {
+                tenancy()->initialize($tenant);
+            } catch (\Throwable $e) {
+                continue;
+            }
 
             $query = User::with('roles');
 
