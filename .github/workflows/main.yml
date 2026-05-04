@@ -10,18 +10,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # (Opcional pero muy útil) Diagnóstico de conectividad
-      - name: Check SSH port reachable
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y netcat-openbsd
-          HOST="${{ secrets.DEPLOY_HOST_IP }}"
-          if [ -z "$HOST" ]; then
-            echo "Missing DEPLOY_HOST_IP secret"
-            exit 1
-          fi
-          nc -vz "$HOST" 1303
-
       - name: Upload Files (SCP)
         uses: appleboy/scp-action@v0.1.7
         with:
