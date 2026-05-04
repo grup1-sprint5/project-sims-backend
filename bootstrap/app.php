@@ -12,17 +12,16 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         then: function () {
-            // Load central API routes FIRST (no tenancy middleware)
-            // These will handle superadmin requests without X-Tenant header
-            if (file_exists(base_path('routes/api.php'))) {
-                \Illuminate\Support\Facades\Route::prefix('api')->group(base_path('routes/api.php'));
-            }
-            
-            // Load tenant routes AFTER (with tenancy middleware)
-            // These will handle requests with X-Tenant header or tenant subdomain
-            // and will override central routes for tenant requests
+            // Load tenant routes FIRST (with tenancy middleware)
+            // These handle tenant requests with X-Tenant header or tenant subdomain.
             if (file_exists(base_path('routes/tenant.php'))) {
                 \Illuminate\Support\Facades\Route::group([], base_path('routes/tenant.php'));
+            }
+
+            // Load central API routes AFTER with /api prefix so they override tenant routes
+            // Central routes are used for superadmin (no tenancy required).
+            if (file_exists(base_path('routes/api.php'))) {
+                \Illuminate\Support\Facades\Route::prefix('api')->group(base_path('routes/api.php'));
             }
         },
     )
