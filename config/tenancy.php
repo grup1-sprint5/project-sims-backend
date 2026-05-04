@@ -21,6 +21,7 @@ return [
         'localhost',
         'grup1-sims.com',
         'www.grup1-sims.com',
+        'jordiarnau.iemhosting.asix2.iesmontsia.cat',
     ],
 
     /**

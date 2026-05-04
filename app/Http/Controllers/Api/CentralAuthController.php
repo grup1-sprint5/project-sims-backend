@@ -18,9 +18,69 @@ use Throwable;
 class CentralAuthController extends Controller
 {
     /**
-     * Authenticate from central domain and return tenant redirect metadata.
+     * Central admin (superadmin) login without tenant context.
+     * Used when logging into the central dashboard from the main domain.
      */
-    public function login(Request $request): JsonResponse
+    public function loginCentralAdmin(Request $request): JsonResponse
+    {
+        try {
+            $centralConnection = (string) (config('tenancy.database.central_connection')
+                ?? config('database.default')
+                ?? 'pgsql');
+
+            $validated = $request->validate([
+                'email' => ['required', 'email'],
+                'password' => ['required', 'string'],
+            ]);
+
+            // Authenticate user from central database (no tenant context)
+            $user = User::on($centralConnection)
+                ->where('email', $validated['email'])
+                ->first();
+
+            if (!$user || !Hash::check($validated['password'], $user->password)) {
+                throw ValidationException::withMessages([
+                    'email' => ['Incorrect credentials.'],
+                ]);
+            }
+
+            if (!$user->active) {
+                return response()->json([
+                    'message' => 'User inactive.',
+                ], 403);
+            }
+
+            // Check if user is superadmin or has central admin access
+            $isSuperAdmin = $user->roles()
+                ->on($centralConnection)
+                ->where('name', 'superadmin')
+                ->exists();
+
+            if (!$isSuperAdmin) {
+                return response()->json([
+                    'message' => 'Only superadmin users can access the central dashboard.',
+                ], 403);
+            }
+
+            // Generate a personal access token for the central admin
+            $token = $user->createToken('central-admin-token')->plainTextToken;
+
+            return response()->json([
+                'message' => 'Central admin login successful',
+                'token' => $token,
+                'user' => $user,
+            ]);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            report($e);
+            return response()->json([
+                'message' => 'Server error: ' . $e->getMessage(),
+                'error' => 'server_error',
+            ], 500);
+        }
+    }
+
     {
         try {
             $centralConnection = (string) (config('tenancy.database.central_connection')
