@@ -52,8 +52,7 @@ class CentralAuthController extends Controller
 
             // Check if user is superadmin or has central admin access
             $isSuperAdmin = $user->roles()
-                ->on($centralConnection)
-                ->where('name', 'superadmin')
+                ->whereRaw('LOWER(name) = ?', ['superadmin'])
                 ->exists();
 
             if (!$isSuperAdmin) {
