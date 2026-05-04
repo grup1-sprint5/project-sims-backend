@@ -14,14 +14,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y netcat-openbsd
-          # El port és el 1303, assegura't que DEPLOY_HOST_IP existeix a Secrets
+          # Fem servir 1303 directament per evitar l'error "missing port number"
           nc -vz -w 5 ${{ secrets.DEPLOY_HOST_IP }} 1303
 
       - name: Install and Build
         run: |
           npm ci
           npm run build
-          # Ens assegurem que la carpeta dist existeix
+          # Comprovem que la carpeta dist s'ha creat correctament
           ls -la dist
 
       - name: Prepare remote folder
@@ -32,9 +32,10 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: 1303
           script: |
-            # Creem la carpeta si no existeix i la netegem
+            # Creem la carpeta de destí i ens assegurem dels permisos
             sudo mkdir -p /var/www/sims-front/dist
             sudo chown -R ${{ secrets.DEPLOY_USER }}:${{ secrets.DEPLOY_USER }} /var/www/sims-front
+            # Netegem el contingut antic
             rm -rf /var/www/sims-front/dist/*
 
       - name: Upload Files (SCP)
@@ -56,8 +57,10 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: 1303
           script: |
-            if sudo systemctl is-active --quiet nginx; then
-              sudo systemctl reload nginx
+            # Canviat a apache2 ja que és el que realment fas servir
+            if sudo systemctl is-active --quiet apache2; then
+              sudo systemctl reload apache2
+              echo "Apache2 reloaded successfully"
             else
-              echo "nginx is not active; skipping reload"
+              echo "Apache2 is not active; skipping reload"
             fi
