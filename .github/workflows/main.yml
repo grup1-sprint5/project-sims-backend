@@ -42,3 +42,16 @@ jobs:
             else
               echo "Skipping nginx reload: sudo without password is not available"
             fi
+            # Install PHP dependencies (non-dev) and optimize autoloader
+            composer install --no-dev --prefer-dist --no-interaction || true
+
+            # Run application migrations
+            php artisan migrate --force || true
+
+            # Ensure tenant schemas/databases are created and migrated
+            php artisan tenants:check-integrity --repair || true
+
+            # Rebuild caches
+            php artisan config:cache || true
+            php artisan route:cache || true
+            php artisan view:cache || true
