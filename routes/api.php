@@ -34,6 +34,14 @@ Route::get('/tenant-slugs/check', [TenantRequestController::class, 'checkSlug'])
 use App\Http\Controllers\Api\AuthController;
 Route::middleware(['auth:sanctum'])->get('/user', [AuthController::class, 'user']);
 
+// Central admin data endpoints (for superadmin dashboard - NO tenancy middleware)
+use App\Http\Controllers\Api\CentralAdminController;
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::get('/users', [CentralAdminController::class, 'users']);
+    Route::get('/roles', [CentralAdminController::class, 'roles']);
+    Route::get('/permissions', [CentralAdminController::class, 'permissions']);
+});
+
 // Admin endpoints for tenant requests (require auth + superadmin)
 Route::middleware(['auth:sanctum'])->group(function () {
 	Route::get('/tenant-requests', [TenantRequestController::class, 'index']);
