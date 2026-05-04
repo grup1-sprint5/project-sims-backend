@@ -1,4 +1,4 @@
-name: Deploy Front
+name: Deploy Backend
 on:
   push:
     branches: [ develop ]
@@ -10,33 +10,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # (Opcional pero muy útil) Diagnóstico de conectividad
       - name: Check SSH port reachable
         run: |
           sudo apt-get update
           sudo apt-get install -y netcat-openbsd
-          # Fem servir 1303 directament per evitar l'error "missing port number"
-          nc -vz -w 5 ${{ secrets.DEPLOY_HOST_IP }} 1303
-
-      - name: Install and Build
-        run: |
-          npm ci
-          npm run build
-          # Comprovem que la carpeta dist s'ha creat correctament
-          ls -la dist
-
-      - name: Prepare remote folder
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST_IP }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: 1303
-          script: |
-            # Creem la carpeta de destí i ens assegurem dels permisos
-            sudo mkdir -p /var/www/sims-front/dist
-            sudo chown -R ${{ secrets.DEPLOY_USER }}:${{ secrets.DEPLOY_USER }} /var/www/sims-front
-            # Netegem el contingut antic
-            rm -rf /var/www/sims-front/dist/*
+          nc -vz ${{ secrets.DEPLOY_HOST_IP }} 1303
 
       - name: Upload Files (SCP)
         uses: appleboy/scp-action@v0.1.7
@@ -45,11 +24,11 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: 1303
-          source: "dist/*"
-          target: "/var/www/sims-front/dist"
-          strip_components: 1
+          source: "app/**,artisan,bootstrap/app.php,bootstrap/providers.php,composer.json,composer.lock,config/**,database/**,public/**,resources/**,routes/**"
+          target: "/var/www/sims-back"
+          rm: false
 
-      - name: Reload Web Server
+      - name: Execute Remote Commands
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST_IP }}
@@ -57,10 +36,22 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: 1303
           script: |
-            # Canviat a apache2 ja que és el que realment fas servir
-            if sudo systemctl is-active --quiet apache2; then
-              sudo systemctl reload apache2
-              echo "Apache2 reloaded successfully"
+            cd /var/www/sims-back
+            if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+              sudo systemctl reload nginx || true
             else
-              echo "Apache2 is not active; skipping reload"
+              echo "Skipping nginx reload: sudo without password is not available"
             fi
+            # Install PHP dependencies (non-dev) and optimize autoloader
+            composer install --no-dev --prefer-dist --no-interaction || true
+
+            # Run application migrations
+            php artisan migrate --force || true
+
+            # Ensure tenant schemas/databases are created and migrated
+            php artisan tenants:check-integrity --repair || true
+
+            # Rebuild caches
+            php artisan config:cache || true
+            php artisan route:cache || true
+            php artisan view:cache || true
