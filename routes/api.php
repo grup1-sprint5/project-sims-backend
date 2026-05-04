@@ -37,5 +37,5 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 
 // Central user endpoint (for central/superadmin authentication)
-use App\Http\Controllers\Api\AuthController;
-Route::middleware(['auth:sanctum'])->get('/user', [AuthController::class, 'user']);
+use App\Http\Controllers\Api\CentralUserController;
+Route::middleware(['auth:sanctum'])->get('/user', [CentralUserController::class, 'show']);
