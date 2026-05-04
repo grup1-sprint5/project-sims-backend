@@ -17,10 +17,9 @@ return Application::configure(basePath: dirname(__DIR__))
                 \Illuminate\Support\Facades\Route::group([], base_path('routes/tenant.php'));
             }
             
-            // Load central API routes AFTER so they override tenant routes
-            // (routes in api.php are without tenancy middleware)
+            // Load central API routes AFTER with /api prefix so they override tenant routes
             if (file_exists(base_path('routes/api.php'))) {
-                \Illuminate\Support\Facades\Route::group([], base_path('routes/api.php'));
+                \Illuminate\Support\Facades\Route::prefix('api')->group(base_path('routes/api.php'));
             }
         },
     )
