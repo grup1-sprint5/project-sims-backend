@@ -19,6 +19,7 @@ use App\Http\Controllers\StripeWebhookController;
 
 Route::get('/health', fn () => response()->json(['status' => 'ok']));
 Route::post('/central/login', [CentralAuthController::class, 'login']);
+Route::post('/login', [CentralAuthController::class, 'loginCentralAdmin']); // Superadmin login without tenant
 Route::post('/payments/stripe/webhook', [StripeWebhookController::class, 'handle']);
 
 // Public tenant registration request (no tenant context)
