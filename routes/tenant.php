@@ -40,7 +40,8 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
     ->prefix('api')
     ->group(function () {
 
-        Route::post('/login', [AuthController::class, 'login'])->name('tenant.login');
+        // Keep tenant login on a dedicated path to avoid collision with central /api/login.
+        Route::post('/tenant/login', [AuthController::class, 'login'])->name('tenant.login');
         Route::post('/auth/exchange-token', [AuthExchangeController::class, 'exchange'])->name('tenant.exchange');
         Route::post('/users', [UserController::class, 'store']); // Public registration
 
