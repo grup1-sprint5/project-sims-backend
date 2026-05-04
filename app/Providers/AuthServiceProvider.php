@@ -49,6 +49,13 @@ class AuthServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->registerPolicies();
+
+        // Implicitly grant all permissions to SuperAdmins
+        \Illuminate\Support\Facades\Gate::before(function ($user, $ability) {
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+        });
     }
 
     /**

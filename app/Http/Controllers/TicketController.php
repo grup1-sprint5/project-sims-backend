@@ -26,12 +26,13 @@ class TicketController extends Controller
         $user = Auth::user();
         $currentTenant = function_exists('tenant') ? tenant()?->id : null;
 
+        // SuperAdmin sees all tickets from all other tenants
+        if ($user->isSuperAdmin()) {
+            return $this->indexForSuperAdmin();
+        }
+
         // Admin/Support sees tickets (scoped by tenant via global scope)
         if ($user->hasPermissionTo('tickets.manage')) {
-            // SuperAdmin sees all tickets from all other tenants
-            if ($user->isSuperAdmin()) {
-                return $this->indexForSuperAdmin();
-            }
 
             $tickets = Ticket::with(['user', 'messages', 'tenant'])->orderBy('created_at', 'desc')->get();
             return TicketResource::collection($tickets);
