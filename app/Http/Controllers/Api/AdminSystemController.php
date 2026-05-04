@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\Tenant;
+use Stancl\Tenancy\Database\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
@@ -14,29 +14,25 @@ class AdminSystemController extends Controller
      */
     public function vehicles(Request $request)
     {
-        $centralConnection = (string) (config('tenancy.database.central_connection')
-            ?? config('database.default')
-            ?? 'pgsql');
-
-        $tenants = DB::connection($centralConnection)
-            ->table('tenants')
-            ->where('active', true)
-            ->get(['id', 'name']);
+        // Get active tenants via tenancy model so we can initialize correctly
+        $tenants = Tenant::where('active', true)->get();
 
         $allVehicles = collect();
 
         foreach ($tenants as $tenant) {
             try {
-                tenancy()->initialize((string) $tenant->id);
+                tenancy()->initialize($tenant);
+
+                $vehicles = DB::table('vehicles')
+                    ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
+                    ->get();
+
+                $allVehicles = $allVehicles->concat($vehicles);
             } catch (\Throwable $e) {
-                continue;
+                // Skip tenant if initialization or query fails
+            } finally {
+                try { tenancy()->end(); } catch (\Throwable $_) {}
             }
-
-            $vehicles = DB::table('vehicles')
-                ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
-                ->get();
-
-            $allVehicles = $allVehicles->concat($vehicles);
         }
 
         $perPage = (int) $request->input('per_page', 15);
@@ -58,29 +54,25 @@ class AdminSystemController extends Controller
      */
     public function reservations(Request $request)
     {
-        $centralConnection = (string) (config('tenancy.database.central_connection')
-            ?? config('database.default')
-            ?? 'pgsql');
-
-        $tenants = DB::connection($centralConnection)
-            ->table('tenants')
-            ->where('active', true)
-            ->get(['id', 'name']);
+        // Use Tenant model to initialize tenancy correctly per tenant
+        $tenants = Tenant::where('active', true)->get();
 
         $allReservations = collect();
 
         foreach ($tenants as $tenant) {
             try {
-                tenancy()->initialize((string) $tenant->id);
+                tenancy()->initialize($tenant);
+
+                $reservations = DB::table('reservations')
+                    ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
+                    ->get();
+
+                $allReservations = $allReservations->concat($reservations);
             } catch (\Throwable $e) {
-                continue;
+                // skip failing tenant
+            } finally {
+                try { tenancy()->end(); } catch (\Throwable $_) {}
             }
-
-            $reservations = DB::table('reservations')
-                ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
-                ->get();
-
-            $allReservations = $allReservations->concat($reservations);
         }
 
         $perPage = (int) $request->input('per_page', 15);
@@ -102,29 +94,24 @@ class AdminSystemController extends Controller
      */
     public function geofences(Request $request)
     {
-        $centralConnection = (string) (config('tenancy.database.central_connection')
-            ?? config('database.default')
-            ?? 'pgsql');
-
-        $tenants = DB::connection($centralConnection)
-            ->table('tenants')
-            ->where('active', true)
-            ->get(['id', 'name']);
+        $tenants = Tenant::where('active', true)->get();
 
         $allGeofences = collect();
 
         foreach ($tenants as $tenant) {
             try {
-                tenancy()->initialize((string) $tenant->id);
+                tenancy()->initialize($tenant);
+
+                $geofences = DB::table('geofences')
+                    ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
+                    ->get();
+
+                $allGeofences = $allGeofences->concat($geofences);
             } catch (\Throwable $e) {
-                continue;
+                // skip failing tenant
+            } finally {
+                try { tenancy()->end(); } catch (\Throwable $_) {}
             }
-
-            $geofences = DB::table('geofences')
-                ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
-                ->get();
-
-            $allGeofences = $allGeofences->concat($geofences);
         }
 
         $perPage = (int) $request->input('per_page', 15);
@@ -146,29 +133,24 @@ class AdminSystemController extends Controller
      */
     public function geofenceEvents(Request $request)
     {
-        $centralConnection = (string) (config('tenancy.database.central_connection')
-            ?? config('database.default')
-            ?? 'pgsql');
-
-        $tenants = DB::connection($centralConnection)
-            ->table('tenants')
-            ->where('active', true)
-            ->get(['id', 'name']);
+        $tenants = Tenant::where('active', true)->get();
 
         $allEvents = collect();
 
         foreach ($tenants as $tenant) {
             try {
-                tenancy()->initialize((string) $tenant->id);
+                tenancy()->initialize($tenant);
+
+                $events = DB::table('geofence_events')
+                    ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
+                    ->get();
+
+                $allEvents = $allEvents->concat($events);
             } catch (\Throwable $e) {
-                continue;
+                // skip failing tenant
+            } finally {
+                try { tenancy()->end(); } catch (\Throwable $_) {}
             }
-
-            $events = DB::table('geofence_events')
-                ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
-                ->get();
-
-            $allEvents = $allEvents->concat($events);
         }
 
         $perPage = (int) $request->input('per_page', 15);
@@ -213,29 +195,24 @@ class AdminSystemController extends Controller
      */
     public function tickets(Request $request)
     {
-        $centralConnection = (string) (config('tenancy.database.central_connection')
-            ?? config('database.default')
-            ?? 'pgsql');
-
-        $tenants = DB::connection($centralConnection)
-            ->table('tenants')
-            ->where('active', true)
-            ->get(['id', 'name']);
+        $tenants = Tenant::where('active', true)->get();
 
         $allTickets = collect();
 
         foreach ($tenants as $tenant) {
             try {
-                tenancy()->initialize((string) $tenant->id);
+                tenancy()->initialize($tenant);
+
+                $tickets = DB::table('tickets')
+                    ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
+                    ->get();
+
+                $allTickets = $allTickets->concat($tickets);
             } catch (\Throwable $e) {
-                continue;
+                // skip failing tenant
+            } finally {
+                try { tenancy()->end(); } catch (\Throwable $_) {}
             }
-
-            $tickets = DB::table('tickets')
-                ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
-                ->get();
-
-            $allTickets = $allTickets->concat($tickets);
         }
 
         $perPage = (int) $request->input('per_page', 15);
