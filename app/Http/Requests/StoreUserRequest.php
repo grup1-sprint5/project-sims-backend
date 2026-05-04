@@ -25,7 +25,6 @@ class StoreUserRequest extends FormRequest
             'password' => ['required', 'string', 'min:8'],
             'active' => ['sometimes', 'boolean'],
             'role_id' => ['nullable', 'integer', 'exists:roles,id'],
-            'tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
         ];
     }
 }

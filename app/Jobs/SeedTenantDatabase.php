@@ -94,7 +94,6 @@ class SeedTenantDatabase implements ShouldQueue
             'email' => $adminEmail,
             'password' => Hash::make('change-me-' . $this->tenant->id),
             'active' => true,
-            'tenant_id' => $tenant->id,
         ]);
 
         $admin->assignRole('TenantAdmin');

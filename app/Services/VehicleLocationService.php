@@ -33,7 +33,7 @@ class VehicleLocationService
      */
     public function getLocations(): array
     {
-        $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
+        $tenantId = function_exists('tenant') && tenant() ? (string) tenant()->id : null;
         
         $locations = [];
 
@@ -45,10 +45,10 @@ class VehicleLocationService
                     ->get();
             } catch (\Throwable $e) {
                 Log::warning('MongoDB fails in getLocations, falling back to SQL: ' . $e->getMessage());
-                $locations = $this->getSqlLocations($tenantId);
+                $locations = $this->getSqlLocations();
             }
         } else {
-            $locations = $this->getSqlLocations($tenantId);
+            $locations = $this->getSqlLocations();
         }
 
         $tenantVehiclePlates = null;
@@ -77,12 +77,10 @@ class VehicleLocationService
         return $result;
     }
 
-    private function getSqlLocations(?string $tenantId)
+    private function getSqlLocations()
     {
         try {
-            return DB::table('vehicle_locations')
-                ->when($tenantId, fn($q) => $q->where('tenant_id', $tenantId))
-                ->get();
+            return DB::table('vehicle_locations')->get();
         } catch (\Throwable $e) {
             Log::error('SQL Fallback also failed in getLocations: ' . $e->getMessage());
             return [];
@@ -94,7 +92,7 @@ class VehicleLocationService
      */
     public function getLocationByPlate(string $licensePlate): ?array
     {
-        $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
+        $tenantId = function_exists('tenant') && tenant() ? (string) tenant()->id : null;
 
         $location = null;
 
@@ -109,10 +107,10 @@ class VehicleLocationService
                     ->when($tenantId, fn($q) => $q->where('tenant_id', $tenantId))
                     ->first();
             } catch (\Throwable $e) {
-                $location = $this->getSqlLocationByPlate($licensePlate, $tenantId);
+                $location = $this->getSqlLocationByPlate($licensePlate);
             }
         } else {
-            $location = $this->getSqlLocationByPlate($licensePlate, $tenantId);
+            $location = $this->getSqlLocationByPlate($licensePlate);
         }
 
         if (!$location) return null;
@@ -124,12 +122,11 @@ class VehicleLocationService
         ];
     }
 
-    private function getSqlLocationByPlate(string $licensePlate, ?string $tenantId)
+    private function getSqlLocationByPlate(string $licensePlate)
     {
         try {
             return DB::table('vehicle_locations')
                 ->where('license_plate', $licensePlate)
-                ->when($tenantId, fn($q) => $q->where('tenant_id', $tenantId))
                 ->first();
         } catch (\Throwable $e) {
             return null;
@@ -141,10 +138,9 @@ class VehicleLocationService
      */
     public function upsertLocation(Vehicle $vehicle, float $latitude, float $longitude, bool $active = false): void
     {
-        $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
+        $tenantId = function_exists('tenant') && tenant() ? (string) tenant()->id : null;
 
         $payload = [
-            'tenant_id' => $tenantId,
             'vehicle_id' => $vehicle->id,
             'license_plate' => $vehicle->license_plate,
             'latitude' => $latitude,
@@ -160,7 +156,7 @@ class VehicleLocationService
                     ->table('vehicle_locations')
                     ->updateOrInsert(
                         ['tenant_id' => $tenantId, 'license_plate' => $vehicle->license_plate],
-                        $payload
+                        array_merge($payload, ['tenant_id' => $tenantId])
                     );
             } catch (\Throwable $e) {
                 Log::warning('MongoDB fails in upsertLocation: ' . $e->getMessage());
@@ -173,8 +169,8 @@ class VehicleLocationService
             $sqlPayload['created_at'] = now();
             
             DB::table('vehicle_locations')->updateOrInsert(
-                ['tenant_id' => $tenantId, 'license_plate' => $vehicle->license_plate],
-                $payload
+                ['license_plate' => $vehicle->license_plate],
+                $sqlPayload
             );
         } catch (\Throwable $e) {
             Log::error('SQL upsertLocation failed: ' . $e->getMessage());
@@ -186,7 +182,7 @@ class VehicleLocationService
      */
     public function deleteLocationByPlate(string $licensePlate): void
     {
-        $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
+        $tenantId = function_exists('tenant') && tenant() ? (string) tenant()->id : null;
 
         // Mongo
         if ($this->canUseMongo()) {
@@ -202,7 +198,6 @@ class VehicleLocationService
         // SQL (Fallback)
         try {
             DB::table('vehicle_locations')
-                ->where('tenant_id', $tenantId)
                 ->where('license_plate', $licensePlate)
                 ->delete();
         } catch (\Throwable $e) {}

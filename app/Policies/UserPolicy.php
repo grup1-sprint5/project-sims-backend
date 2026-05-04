@@ -40,7 +40,7 @@ class UserPolicy
         if ($user->id === $targetUser->id) { return true; }
         if (!$this->hasPerm($user, 'users.view', 'users.manage')) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
+        return true;
     }
 
     /**
@@ -62,7 +62,7 @@ class UserPolicy
         if ($user->id === $targetUser->id) { return true; }
         if (!$this->hasPerm($user, 'users.manage')) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
+        return true;
     }
 
     /**
@@ -79,7 +79,7 @@ class UserPolicy
 
         if (!$canDelete) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
+        return true;
     }
 
     /**
@@ -89,6 +89,6 @@ class UserPolicy
     {
         if (!$this->hasPerm($user, 'users.restore', 'users.manage')) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $user->tenant_id && $user->tenant_id === $targetUser->tenant_id;
+        return true;
     }
 }

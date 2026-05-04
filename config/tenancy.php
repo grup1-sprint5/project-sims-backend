@@ -2,26 +2,11 @@
 
 declare(strict_types=1);
 
-use Stancl\Tenancy\Database\Models\Domain;
 use Stancl\Tenancy\Database\Models\Tenant;
 
 return [
     'tenant_model' => App\Models\Tenant::class,
     'id_generator' => Stancl\Tenancy\UUIDGenerator::class,
-
-    'domain_model' => Domain::class,
-
-    /**
-     * The list of domains hosting your central app.
-     *
-     * Only relevant if you're using the domain or subdomain identification middleware.
-     */
-    'central_domains' => [
-        '127.0.0.1',
-        'localhost',
-        'grup1-sims.com',
-        'www.grup1-sims.com',
-    ],
 
     /**
      * Tenancy bootstrappers are executed when tenancy is initialized.

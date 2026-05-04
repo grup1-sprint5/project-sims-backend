@@ -8,7 +8,6 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -63,7 +62,8 @@ class CentralAuthController extends Controller
                     ], 403);
                 }
 
-                $token = $tenantUser->createToken('api-token', ["tenant:{$tenant->id}"])->plainTextToken;
+                $tenantUuid = (string) $tenant->id;
+                $token = $tenantUser->createToken('api-token', ["tenant:{$tenantUuid}"])->plainTextToken;
 
                 return response()->json([
                     'message' => 'Login successful',
@@ -151,38 +151,15 @@ class CentralAuthController extends Controller
     {
         $slug = Str::slug($organization);
         $compact = str_replace('-', '', $slug !== '' ? $slug : $organization);
-        $connection = (string) (config('tenancy.database.central_connection')
-            ?? config('database.default')
-            ?? 'pgsql');
-
-        $hasSlugColumn = false;
-
-        try {
-            $hasSlugColumn = Schema::connection($connection)->hasColumn('tenants', 'slug');
-        } catch (Throwable $e) {
-            report($e);
-        }
 
         return Tenant::query()
-            ->where(function ($query) use ($organization, $slug, $compact, $hasSlugColumn) {
+            ->where(function ($query) use ($organization, $slug, $compact) {
                 $query->whereRaw('LOWER(name) = ?', [$organization]);
 
-                if ($hasSlugColumn) {
-                    $query->orWhereRaw('LOWER(slug) = ?', [$organization]);
-                    $query->orWhereRaw("REPLACE(LOWER(slug), '-', '') = ?", [$compact]);
-                    if ($slug !== '' && $slug !== $organization) {
-                        $query->orWhereRaw('LOWER(slug) = ?', [$slug]);
-                    }
-
-                    if (ctype_digit($organization)) {
-                        $query->orWhere('id', (int) $organization);
-                    }
-                } else {
-                    $query->orWhereRaw('LOWER(id) = ?', [$organization]);
-                    $query->orWhereRaw("REPLACE(LOWER(id), '-', '') = ?", [$compact]);
-                    if ($slug !== '' && $slug !== $organization) {
-                        $query->orWhereRaw('LOWER(id) = ?', [$slug]);
-                    }
+                $query->orWhereRaw('LOWER(slug) = ?', [$organization]);
+                $query->orWhereRaw("REPLACE(LOWER(slug), '-', '') = ?", [$compact]);
+                if ($slug !== '' && $slug !== $organization) {
+                    $query->orWhereRaw('LOWER(slug) = ?', [$slug]);
                 }
             })
             ->first();
@@ -217,6 +194,6 @@ class CentralAuthController extends Controller
 
     private function tenantIdentifier(Tenant $tenant): string
     {
-        return (string) ($tenant->getTenantKey() ?: $tenant->id);
+        return (string) $tenant->slug;
     }
 }

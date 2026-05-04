@@ -11,7 +11,6 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Schema;
 
 class ReservationController extends Controller
 {
@@ -31,7 +30,7 @@ class ReservationController extends Controller
                 return $this->indexForSuperAdmin();
             }
 
-            $reservations = Reservation::with(['user', 'vehicle', 'trip', 'tenant'])
+            $reservations = Reservation::with(['user', 'vehicle', 'trip'])
                 ->orderBy('scheduled_start', 'desc');
 
             return $this->normalizeReservationCollectionForResponse($reservations->get());
@@ -50,18 +49,10 @@ class ReservationController extends Controller
         $originalTenant = function_exists('tenant') ? tenant() : null;
         $rows = collect();
 
-        // Get all active tenants except the central one.
-        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
-        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
-
-        $tenantsQuery = Tenant::query()->where('active', true);
-        if ($hasSlugColumn) {
-            $tenantsQuery->where('slug', '!=', 'central');
-        } else {
-            $tenantsQuery->where('id', '!=', 'central');
-        }
-
-        $tenants = $tenantsQuery->get();
+        $tenants = Tenant::query()
+            ->where('active', true)
+            ->where('slug', '!=', 'central')
+            ->get();
 
         foreach ($tenants as $tenant) {
             if (!$tenant instanceof Tenant) {
@@ -76,9 +67,9 @@ class ReservationController extends Controller
                 ->map(function (Reservation $reservation) use ($tenant) {
                     $data = $reservation->toArray();
                     $data = $this->normalizeReservationArrayForResponse($data);
-                    $data['tenant_id'] = $tenant->id;
+                    $data['tenant_id'] = $tenant->slug;
                     $data['tenant'] = [
-                        'id' => $tenant->id,
+                        'id' => $tenant->slug,
                         'name' => $tenant->name,
                     ];
                     return $data;
@@ -113,13 +104,6 @@ class ReservationController extends Controller
         return DB::transaction(function () use ($validated, $request) {
             $vehicle = Vehicle::where('id', $validated['vehicle_id'])->lockForUpdate()->firstOrFail();
             $user = $request->user();
-            
-            // Verificar tenant
-            if ($user->tenant_id !== null && $vehicle->tenant_id !== $user->tenant_id) {
-                return response()->json([
-                    'message' => 'No pots reservar vehicles d\'altres tenants'
-                ], 403);
-            }
             
             $requestedStart = Carbon::parse($validated['scheduled_start']);
             $requestedEnd = Carbon::parse($validated['scheduled_end']);
@@ -174,7 +158,6 @@ class ReservationController extends Controller
 
             $reservation = $user->reservations()->create([
                 'vehicle_id' => $vehicle->id,
-                'tenant_id' => $user->tenant_id,
                 'scheduled_start' => $requestedStart,
                 'scheduled_end' => $requestedEnd,
                 'activation_deadline' => $activationDeadline,
@@ -314,12 +297,18 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Invalid reservation amount.'], 422);
         }
 
-        $tenantId = $reservation->tenant_id ?? $request->user()->tenant_id;
+        $tenantId = function_exists('tenancy') && tenancy()->initialized
+            ? (string) tenancy()->tenant()->id
+            : '';
         $successUrl = $validated['success_url'] ?? config('services.stripe.success_url');
         $cancelUrl = $validated['cancel_url'] ?? config('services.stripe.cancel_url');
 
         if (!$successUrl || !$cancelUrl) {
             return response()->json(['message' => 'Missing success/cancel URL for Stripe checkout.'], 500);
+        }
+
+        if ($tenantId === '') {
+            return response()->json(['message' => 'Tenant context missing.'], 500);
         }
 
         $sessionResponse = Http::asForm()

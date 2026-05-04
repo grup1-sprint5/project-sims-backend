@@ -2,33 +2,17 @@
 
 namespace App\Models\Traits;
 
-use App\Models\Scopes\TenantScope;
-
 /**
  * Trait BelongsToTenant
  *
- * Registers the (now no-op) TenantScope for backward compatibility and
- * auto-populates `tenant_id` from the active stancl/tenancy context on create.
- * The actual tenant isolation is handled by PostgreSQL schema separation.
+ * Legacy placeholder kept for compatibility. Tenant isolation is handled
+ * by PostgreSQL schema separation, so no tenant_id hooks are needed.
  */
 trait BelongsToTenant
 {
     public static function bootBelongsToTenant(): void
     {
-        // The scope is kept for backward compatibility but does nothing
-        // (schema isolation already restricts all queries to the tenant).
-        static::addGlobalScope(new TenantScope());
-
-        // Auto-assign tenant_id on creating from the active tenancy context.
-        static::creating(function ($model) {
-            if (empty($model->tenant_id)) {
-                if (tenancy()->initialized) {
-                    $model->tenant_id = tenant()->id;
-                } elseif (auth()->check() && auth()->user()->tenant_id) {
-                    $model->tenant_id = auth()->user()->tenant_id;
-                }
-            }
-        });
+        // Intentionally left empty.
     }
 }
 

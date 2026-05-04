@@ -37,12 +37,18 @@ class WalletController extends Controller
             return response()->json(['message' => 'Invalid top-up amount.'], 422);
         }
 
-        $tenantId = $user->tenant_id;
+        $tenantId = function_exists('tenancy') && tenancy()->initialized
+            ? (string) tenancy()->tenant()->id
+            : '';
         $successUrl = $validated['success_url'] ?? config('services.stripe.success_url');
         $cancelUrl = $validated['cancel_url'] ?? config('services.stripe.cancel_url');
 
         if (!$successUrl || !$cancelUrl) {
             return response()->json(['message' => 'Missing success/cancel URL for Stripe checkout.'], 500);
+        }
+
+        if ($tenantId === '') {
+            return response()->json(['message' => 'Tenant context missing.'], 500);
         }
 
         // Ensure Stripe sends back the checkout session id on redirect.
@@ -124,7 +130,11 @@ class WalletController extends Controller
         $sessionUserId = (int) ($metadata['user_id'] ?? $session['client_reference_id'] ?? 0);
         $sessionTenantId = (string) ($metadata['tenant_id'] ?? '');
 
-        if ($sessionUserId !== (int) $user->id || $sessionTenantId !== (string) $user->tenant_id) {
+        $currentTenantId = function_exists('tenancy') && tenancy()->initialized
+            ? (string) tenancy()->tenant()->id
+            : '';
+
+        if ($sessionUserId !== (int) $user->id || $sessionTenantId !== $currentTenantId) {
             return response()->json(['message' => 'Stripe session does not belong to the current user.'], 403);
         }
 

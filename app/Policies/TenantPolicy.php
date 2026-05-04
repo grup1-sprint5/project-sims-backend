@@ -57,11 +57,11 @@ class TenantPolicy
 
     private function belongsToTenant(User $user, Tenant $tenant): bool
     {
-        $userTenant = (string) ($user->tenant_id ?? '');
-        $tenantId = (string) $tenant->id;
-        $tenantSlug = (string) ($tenant->slug ?? '');
+        if (!function_exists('tenancy') || !tenancy()->initialized) {
+            return false;
+        }
 
-        return $userTenant !== '' && ($userTenant === $tenantId || ($tenantSlug !== '' && $userTenant === $tenantSlug));
+        return (string) tenancy()->tenant()->id === (string) $tenant->id;
     }
 
     /**

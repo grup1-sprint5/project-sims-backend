@@ -24,7 +24,7 @@ class VehiclePolicy
     {
         if (!$user->hasPermissionTo('vehicles.view')) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $vehicle->tenant_id === null || $vehicle->tenant_id === $user->tenant_id;
+        return true;
     }
 
     /**
@@ -44,7 +44,7 @@ class VehiclePolicy
     {
         if (!$user->hasPermissionTo('vehicles.manage')) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $vehicle->tenant_id === null || $vehicle->tenant_id === $user->tenant_id;
+        return true;
     }
 
     /**
@@ -58,6 +58,6 @@ class VehiclePolicy
 
         if (!$canDelete) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $vehicle->tenant_id === null || $vehicle->tenant_id === $user->tenant_id;
+        return true;
     }
 }

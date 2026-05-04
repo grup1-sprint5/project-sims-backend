@@ -16,11 +16,15 @@ class TenantDatabaseSeeder extends Seeder
             RolesSeeder::class,
         ]);
 
-        $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
-        if (!$tenantId) {
+        $tenantModel = function_exists('tenant') ? tenant() : null;
+        if (!$tenantModel) {
             echo "⚠️  No tenant context initialized. Skipping TenantDatabaseSeeder.\n";
             return;
         }
+
+        $tenantSlug = (string) ($tenantModel->slug ?? '');
+        $tenantName = (string) ($tenantModel->name ?? '');
+        $tenantKey = $this->resolveTenantProfileKey($tenantSlug, $tenantName);
 
         $password = Hash::make('password');
 
@@ -43,11 +47,16 @@ class TenantDatabaseSeeder extends Seeder
             ],
         ];
 
-        foreach ($profiles[$tenantId] ?? [] as $profile) {
+        $selectedProfiles = $profiles[$tenantKey] ?? [];
+        if ($selectedProfiles === []) {
+            echo "⚠️  No profile configuration for tenant {$tenantKey}. Skipping user seed.\n";
+            return;
+        }
+
+        foreach ($selectedProfiles as $profile) {
             $user = User::updateOrCreate(
                 ['email' => $profile['email']],
                 [
-                    'tenant_id' => $tenantId,
                     'name' => $profile['name'],
                     'username' => $profile['username'],
                     'password' => $password,
@@ -58,11 +67,10 @@ class TenantDatabaseSeeder extends Seeder
         }
 
         // Single global super-admin account for platform-wide dashboard.
-        if ($tenantId === 'sims-corp') {
+        if ($tenantKey === 'sims-corp') {
             $superAdmin = User::updateOrCreate(
                 ['email' => 'superadmin@simsplatform.com'],
                 [
-                    'tenant_id' => $tenantId,
                     'name' => 'Platform SuperAdmin',
                     'username' => 'superadmin',
                     'password' => $password,
@@ -76,5 +84,24 @@ class TenantDatabaseSeeder extends Seeder
         $this->call([
             TestDataSeeder::class,
         ]);
+    }
+
+    private function resolveTenantProfileKey(string $tenantSlug, string $tenantName): string
+    {
+        $slug = strtolower(trim($tenantSlug));
+        if (in_array($slug, ['sims-corp', 'ecomove'], true)) {
+            return $slug;
+        }
+
+        $name = strtolower(trim($tenantName));
+        if (str_contains($name, 'sims')) {
+            return 'sims-corp';
+        }
+
+        if (str_contains($name, 'eco')) {
+            return 'ecomove';
+        }
+
+        return $slug;
     }
 }

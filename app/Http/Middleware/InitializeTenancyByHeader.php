@@ -2,20 +2,20 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Tenant;
+use Spatie\Permission\PermissionRegistrar;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 /**
- * Identifies the current tenant using explicit tenant key strategy:
+ * Identifies the current tenant using an explicit tenant key:
  *
- * 1. Explicit tenant key from request data (`X-Tenant` header by default,
- *    cookie or querystring fallback).
+ * 1. X-Tenant header (preferred), cookie or querystring fallback.
  *
  * If not resolved, request fails with a tenant_not_identified error.
  */
-class InitializeTenancyByDomainOrHeader
+class InitializeTenancyByHeader
 {
     public function handle(Request $request, Closure $next): mixed
     {
@@ -31,6 +31,8 @@ class InitializeTenancyByDomainOrHeader
             if ($tenant) {
                 try {
                     tenancy()->initialize($tenant);
+                    // Ensure permission cache is scoped to the current tenant.
+                    app(PermissionRegistrar::class)->forgetCachedPermissions();
                 } catch (Throwable $e) {
                     report($e);
 
@@ -62,49 +64,19 @@ class InitializeTenancyByDomainOrHeader
         // No tenant resolved.
         if ($request->expectsJson() || $request->is('api/*')) {
             return response()->json([
-                'message' => 'Tenant not identified. Provide X-Tenant header.',
+                'message' => 'Tenant not identified. Provide a valid X-Tenant header.',
                 'error' => 'tenant_not_identified',
-            ], 400);
+            ], 422);
         }
 
-        abort(400, 'Tenant not identified.');
+        abort(422, 'Tenant not identified.');
     }
 
     private function resolveTenantByKey(string $tenantKey): mixed
     {
-        $tenantModel = config('tenancy.tenant_model');
-        if (!is_string($tenantModel) || !class_exists($tenantModel)) {
-            return null;
-        }
-
-        $connection = (string) (config('tenancy.database.central_connection')
-            ?? config('database.default')
-            ?? 'pgsql');
-
-        $hasSlugColumn = false;
-
-        try {
-            $hasSlugColumn = Schema::connection($connection)->hasColumn('tenants', 'slug');
-        } catch (Throwable $e) {
-            report($e);
-        }
-
-        if ($hasSlugColumn) {
-            $tenantBySlug = $tenantModel::query()->whereRaw('LOWER(slug) = ?', [strtolower($tenantKey)])->first();
-            if ($tenantBySlug) {
-                return $tenantBySlug;
-            }
-        }
-
-        if (ctype_digit($tenantKey)) {
-            return $tenantModel::query()->find((int) $tenantKey);
-        }
-
-        // When there is no legacy slug column, id is expected to be string-like.
-        if (!$hasSlugColumn) {
-            return $tenantModel::query()->find($tenantKey);
-        }
-
-        return null;
+        return Tenant::query()
+            ->whereRaw('LOWER(slug) = ?', [strtolower($tenantKey)])
+            ->orWhereRaw('LOWER(id) = ?', [strtolower($tenantKey)])
+            ->first();
     }
 }

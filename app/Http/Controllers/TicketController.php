@@ -8,7 +8,6 @@ use App\Http\Resources\TicketResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Handles ticket CRUD operations.
@@ -34,7 +33,7 @@ class TicketController extends Controller
                 return $this->indexForSuperAdmin();
             }
 
-            $tickets = Ticket::with(['user', 'messages', 'tenant'])->orderBy('created_at', 'desc')->get();
+            $tickets = Ticket::with(['user', 'messages'])->orderBy('created_at', 'desc')->get();
             return TicketResource::collection($tickets);
         }
 
@@ -55,18 +54,10 @@ class TicketController extends Controller
         $originalTenant = function_exists('tenant') ? tenant() : null;
         $rows = collect();
 
-        // Get all active tenants except the central one.
-        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
-        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
-
-        $tenantsQuery = Tenant::query()->where('active', true);
-        if ($hasSlugColumn) {
-            $tenantsQuery->where('slug', '!=', 'central');
-        } else {
-            $tenantsQuery->where('id', '!=', 'central');
-        }
-
-        $tenants = $tenantsQuery->get();
+        $tenants = Tenant::query()
+            ->where('active', true)
+            ->where('slug', '!=', 'central')
+            ->get();
 
         foreach ($tenants as $tenant) {
             if (!$tenant instanceof Tenant) {
@@ -80,9 +71,9 @@ class TicketController extends Controller
                 ->get()
                 ->map(function ($ticket) use ($tenant) {
                     $data = (new TicketResource($ticket))->toArray(request());
-                    $data['tenant_id'] = $tenant->id;
+                    $data['tenant_id'] = $tenant->slug;
                     $data['tenant'] = [
-                        'id' => $tenant->id,
+                        'id' => $tenant->slug,
                         'name' => $tenant->name,
                     ];
                     return $data;

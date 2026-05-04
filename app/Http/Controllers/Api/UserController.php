@@ -11,7 +11,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
@@ -32,21 +31,13 @@ class UserController extends Controller
             return $this->indexForSuperAdmin($request);
         }
 
-        $query = User::with(['roles', 'tenant']);
-        
-        // Force isolation for non-superadmins, even if TenantScope fails for some reason
-        if (!$authUser->isSuperAdmin() && $authUser->tenant_id) {
-            $query->where('tenant_id', $authUser->tenant_id);
-        }
+        $query = User::with(['roles']);
 
         if ($search = $request->input('search')) {
             $query->where(fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
         }
         if ($role = $request->input('role')) {
             $query->whereHas('roles', fn($q) => $q->where('name', $role));
-        }
-        if ($tenant = $request->input('tenant_id')) {
-            $query->where('tenant_id', $tenant);
         }
         if (!is_null($request->input('active'))) {
             $query->where('active', (bool) $request->input('active'));
@@ -62,18 +53,10 @@ class UserController extends Controller
         $originalTenant = function_exists('tenant') ? tenant() : null;
         $rows = collect();
 
-        // Get all active tenants except the central one.
-        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
-        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
-
-        $tenantsQuery = Tenant::query()->where('active', true);
-        if ($hasSlugColumn) {
-            $tenantsQuery->where('slug', '!=', 'central');
-        } else {
-            $tenantsQuery->where('id', '!=', 'central');
-        }
-
-        $tenants = $tenantsQuery->get();
+        $tenants = Tenant::query()
+            ->where('active', true)
+            ->where('slug', '!=', 'central')
+            ->get();
 
         foreach ($tenants as $tenant) {
             if (!$tenant instanceof Tenant) {
@@ -109,10 +92,10 @@ class UserController extends Controller
                         'guard_name' => $r->guard_name,
                     ])->values(),
                     'tenant' => [
-                        'id' => $tenant->id,
+                        'id' => $tenant->slug,
                         'name' => $tenant->name,
                     ],
-                    'tenant_id' => $tenant->id,
+                    'tenant_id' => $tenant->slug,
                     'created_at' => $user->created_at?->toIso8601String(),
                     'updated_at' => $user->updated_at?->toIso8601String(),
                 ];
@@ -159,7 +142,7 @@ class UserController extends Controller
     {
         $this->authorize('view', $user);
 
-        return new UserResource($user->load(['roles', 'tenant']));
+        return new UserResource($user->load(['roles']));
     }
 
     /**
@@ -183,7 +166,7 @@ class UserController extends Controller
             }
         }
 
-        return (new UserResource($user->load('roles', 'tenant')))->response()->setStatusCode(201);
+        return (new UserResource($user->load('roles')))->response()->setStatusCode(201);
     }
 
     /**
@@ -213,7 +196,7 @@ class UserController extends Controller
             }
         }
 
-        return new UserResource($user->load('roles', 'tenant'));
+        return new UserResource($user->load('roles'));
     }
 
     /**

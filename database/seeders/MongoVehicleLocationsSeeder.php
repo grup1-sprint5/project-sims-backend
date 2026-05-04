@@ -18,8 +18,8 @@ class MongoVehicleLocationsSeeder extends Seeder
 
     public function run()
     {
-        $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
-        if (!$tenantId) {
+        $tenantSlug = function_exists('tenant') && tenant() ? (string) tenant()->slug : null;
+        if (!$tenantSlug) {
             echo "⚠️  No tenant context initialized. Skipping MongoVehicleLocationsSeeder.\n";
             return;
         }
@@ -29,7 +29,7 @@ class MongoVehicleLocationsSeeder extends Seeder
             'ecomove' => 4,
         ];
 
-        $vehicleLimit = $vehicleLimitByTenant[$tenantId] ?? 5;
+        $vehicleLimit = $vehicleLimitByTenant[$tenantSlug] ?? 5;
 
         $vehicles = Vehicle::query()
             ->select(['id', 'license_plate'])
@@ -38,7 +38,7 @@ class MongoVehicleLocationsSeeder extends Seeder
             ->get();
 
         if ($vehicles->isEmpty()) {
-            echo "⚠️  No vehicles found for tenant {$tenantId}. Skipping MongoVehicleLocationsSeeder.\n";
+            echo "⚠️  No vehicles found for tenant {$tenantSlug}. Skipping MongoVehicleLocationsSeeder.\n";
             return;
         }
 
@@ -59,7 +59,7 @@ class MongoVehicleLocationsSeeder extends Seeder
             ],
         ];
 
-        $coordinates = $coordinatesByTenant[$tenantId] ?? $coordinatesByTenant['sims-corp'];
+        $coordinates = $coordinatesByTenant[$tenantSlug] ?? $coordinatesByTenant['sims-corp'];
 
         foreach ($vehicles as $index => $vehicle) {
             $point = $coordinates[$index] ?? $coordinates[array_key_last($coordinates)];
@@ -73,6 +73,6 @@ class MongoVehicleLocationsSeeder extends Seeder
             );
         }
 
-        echo "✅ Vehicle locations seeded for tenant {$tenantId} (MongoDB if available + SQL fallback populated)!\n";
+        echo "✅ Vehicle locations seeded for tenant {$tenantSlug} (MongoDB if available + SQL fallback populated)!\n";
     }
 }

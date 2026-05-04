@@ -5,18 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\Traits\BelongsToTenant;
 use Carbon\Carbon;
 
 class Reservation extends Model
 {
-    use HasFactory, SoftDeletes, BelongsToTenant;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'tenant_id',
         'user_id',
         'vehicle_id',
-        'tenant_id',
         'scheduled_start',
         'scheduled_end',
         'activation_deadline',
@@ -40,11 +37,6 @@ class Reservation extends Model
         'total_price' => 'float',
         'cancellation_fee' => 'float',
     ];
-
-    public function tenant()
-    {
-        return $this->belongsTo(Tenant::class);
-    }
 
     public function user()
     {

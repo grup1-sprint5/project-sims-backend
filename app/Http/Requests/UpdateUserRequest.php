@@ -24,7 +24,6 @@ class UpdateUserRequest extends FormRequest
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'active' => ['sometimes', 'boolean'],
             'role_id' => ['nullable', 'integer', 'exists:roles,id'],
-            'tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
         ];
     }
 }

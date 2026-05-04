@@ -4,6 +4,8 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class TenantsSeeder extends Seeder
 {
@@ -39,36 +41,70 @@ class TenantsSeeder extends Seeder
             ],
         ];
 
-        foreach ($tenants as $tenant) {
-            $payload = $tenant;
-            $payload['id'] = $tenant['slug'];
-            unset($payload['city'], $payload['map_center_lat'], $payload['map_center_lng']);
-            unset($payload['slug']);
+        $connection = (string) (config('tenancy.database.central_connection')
+            ?? config('database.default')
+            ?? 'pgsql');
 
-            $exists = DB::table('tenants')->where('id', $payload['id'])->exists();
-            if ($exists) {
-                DB::table('tenants')->where('id', $payload['id'])->update(array_merge($payload, [
-                    'updated_at' => now(),
-                ]));
+        $hasDataColumn = Schema::connection($connection)->hasColumn('tenants', 'data');
+
+        foreach ($tenants as $tenant) {
+            $slug = strtolower((string) $tenant['slug']);
+
+            $payload = [
+                'name' => $tenant['name'],
+                'slug' => $slug,
+                'tax_id' => $tenant['tax_id'],
+                'email' => $tenant['email'],
+                'phone' => $tenant['phone'],
+                'address' => $tenant['address'],
+                'active' => (bool) $tenant['active'],
+            ];
+
+            $existing = DB::connection($connection)
+                ->table('tenants')
+                ->where('slug', $slug)
+                ->first();
+
+            if ($existing) {
+                DB::connection($connection)
+                    ->table('tenants')
+                    ->where('id', $existing->id)
+                    ->update(array_merge($payload, ['updated_at' => now()]));
+                $tenantId = (string) $existing->id;
             } else {
-                DB::table('tenants')->insert(array_merge($payload, [
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]));
+                $tenantId = (string) Str::uuid();
+                DB::connection($connection)
+                    ->table('tenants')
+                    ->insert(array_merge($payload, [
+                        'id' => $tenantId,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]));
             }
 
-            $existingData = DB::table('tenants')->where('id', $payload['id'])->value('data');
-            $decodedData = is_string($existingData) ? (json_decode($existingData, true) ?: []) : ((array) $existingData);
+            if ($hasDataColumn) {
+                $existingData = DB::connection($connection)
+                    ->table('tenants')
+                    ->where('id', $tenantId)
+                    ->value('data');
+                $decodedData = is_string($existingData)
+                    ? (json_decode($existingData, true) ?: [])
+                    : ((array) $existingData);
 
-            $newData = array_merge($decodedData, [
-                'city' => $tenant['city'],
-                'map_center_lat' => (float) $tenant['map_center_lat'],
-                'map_center_lng' => (float) $tenant['map_center_lng'],
-            ]);
+                $newData = array_merge($decodedData, [
+                    'city' => $tenant['city'],
+                    'map_center_lat' => (float) $tenant['map_center_lat'],
+                    'map_center_lng' => (float) $tenant['map_center_lng'],
+                ]);
 
-            DB::table('tenants')
-                ->where('id', $payload['id'])
-                ->update(['data' => json_encode($newData)]);
+                DB::connection($connection)
+                    ->table('tenants')
+                    ->where('id', $tenantId)
+                    ->update([
+                        'data' => json_encode($newData),
+                        'updated_at' => now(),
+                    ]);
+            }
         }
     }
 }

@@ -10,12 +10,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use Spatie\Permission\Models\Role;
-use App\Models\Traits\BelongsToTenant;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens, SoftDeletes, BelongsToTenant;
+    use HasFactory, Notifiable, HasApiTokens, SoftDeletes;
     use HasRoles;
 
     public $guard_name = 'web';
@@ -45,7 +44,6 @@ class User extends Authenticatable
         'password',
         'active',
         'wallet_balance',
-        'tenant_id',  // string slug, auto-assigned by BelongsToTenant
     ];
 
     /**
@@ -90,14 +88,6 @@ class User extends Authenticatable
     public function tickets()
     {
         return $this->hasMany(Ticket::class);
-    }
-
-    /**
-     * Tenant this user belongs to.
-     */
-    public function tenant()
-    {
-        return $this->belongsTo(Tenant::class);
     }
 
     /**

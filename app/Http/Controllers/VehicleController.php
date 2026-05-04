@@ -9,7 +9,6 @@ use App\Http\Requests\Vehicle\UpdateVehicleRequest;
 use App\Services\VehicleLocationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 
 class VehicleController extends Controller
 {
@@ -102,17 +101,10 @@ class VehicleController extends Controller
         $originalTenant = function_exists('tenant') ? tenant() : null;
         $rows = collect();
 
-        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
-        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
-
-        $tenantsQuery = Tenant::query()->where('active', true);
-        if ($hasSlugColumn) {
-            $tenantsQuery->where('slug', '!=', 'central');
-        } else {
-            $tenantsQuery->where('id', '!=', 'central');
-        }
-
-        $tenants = $tenantsQuery->get();
+        $tenants = Tenant::query()
+            ->where('active', true)
+            ->where('slug', '!=', 'central')
+            ->get();
 
         foreach ($tenants as $tenant) {
             if (!$tenant instanceof Tenant) {
@@ -167,9 +159,9 @@ class VehicleController extends Controller
 
                 return [
                     'id' => $vehicle->id,
-                    'tenant_id' => $tenant->id,
+                    'tenant_id' => $tenant->slug,
                     'tenant' => [
-                        'id' => $tenant->id,
+                        'id' => $tenant->slug,
                         'name' => $tenant->name,
                     ],
                     'license_plate' => $vehicle->license_plate,
@@ -214,9 +206,6 @@ class VehicleController extends Controller
 
         unset($data['latitude'], $data['longitude']);
         
-        // Assign tenant_id from authenticated user
-        $data['tenant_id'] = $request->user()->tenant_id;
-
         $vehicle = Vehicle::create($data);
 
         if ($latitude !== null && $longitude !== null) {

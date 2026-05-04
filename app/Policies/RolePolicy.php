@@ -39,10 +39,6 @@ class RolePolicy
             if (strtolower($role->name) === 'superadmin') {
                 return false;
             }
-
-            if ($role->tenant_id !== null && $role->tenant_id !== $user->tenant_id) {
-                return false;
-            }
         }
 
         return true;
@@ -63,10 +59,6 @@ class RolePolicy
             return false;
         }
 
-        if (!$user->isSuperAdmin() && $role->tenant_id !== $user->tenant_id) {
-            return false;
-        }
-
         return true;
     }
 
@@ -80,10 +72,6 @@ class RolePolicy
             || ($user->hasRole('TenantAdmin') && $this->hasPerm($user, 'roles.manage'));
 
         if (!$canDelete) {
-            return false;
-        }
-
-        if (!$user->isSuperAdmin() && $role->tenant_id !== $user->tenant_id) {
             return false;
         }
 

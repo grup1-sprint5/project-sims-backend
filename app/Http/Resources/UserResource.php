@@ -21,7 +21,6 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'active' => (bool) $this->active,
             'roles' => $this->whenLoaded('roles'),
-            'tenant' => $this->whenLoaded('tenant'),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

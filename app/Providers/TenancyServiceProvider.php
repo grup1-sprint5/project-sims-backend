@@ -50,15 +50,7 @@ class TenancyServiceProvider extends ServiceProvider
                 })->shouldBeQueued(false), // `false` by default, but you probably want to make this `true` for production.
             ],
 
-            // Domain events
-            Events\CreatingDomain::class => [],
-            Events\DomainCreated::class => [],
-            Events\SavingDomain::class => [],
-            Events\DomainSaved::class => [],
-            Events\UpdatingDomain::class => [],
-            Events\DomainUpdated::class => [],
-            Events\DeletingDomain::class => [],
-            Events\DomainDeleted::class => [],
+            // Domain events removed — identification is header-only.
 
             // Database events
             Events\DatabaseCreated::class => [],
@@ -121,7 +113,7 @@ class TenancyServiceProvider extends ServiceProvider
     protected function makeTenancyMiddlewareHighestPriority()
     {
         $tenancyMiddleware = [
-            \App\Http\Middleware\InitializeTenancyByDomainOrHeader::class,
+            \App\Http\Middleware\InitializeTenancyByHeader::class,
         ];
 
         foreach (array_reverse($tenancyMiddleware) as $middleware) {

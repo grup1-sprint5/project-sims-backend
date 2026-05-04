@@ -27,7 +27,7 @@ class ReservationPolicy
         if ($user->id === $reservation->user_id) { return true; }
         if (!$user->hasPermissionTo('reservations.view')) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $reservation->tenant_id === null || $reservation->tenant_id === $user->tenant_id;
+        return true;
     }
 
     /**
@@ -49,7 +49,7 @@ class ReservationPolicy
         if ($user->id === $reservation->user_id && $user->hasPermissionTo('reservations.manage')) { return true; }
         if (!$user->hasPermissionTo('reservations.manage')) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $reservation->tenant_id === null || $reservation->tenant_id === $user->tenant_id;
+        return true;
     }
 
     /**
@@ -63,7 +63,7 @@ class ReservationPolicy
 
         if (!$canDelete) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $reservation->tenant_id === null || $reservation->tenant_id === $user->tenant_id;
+        return true;
     }
 
     /**
@@ -104,6 +104,6 @@ class ReservationPolicy
 
         if (!$canForceFinish) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $reservation->tenant_id === null || $reservation->tenant_id === $user->tenant_id;
+        return true;
     }
 }

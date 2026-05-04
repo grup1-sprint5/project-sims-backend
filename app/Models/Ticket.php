@@ -4,14 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Traits\BelongsToTenant;
 
 class Ticket extends Model
 {
-    use HasFactory, BelongsToTenant;
+    use HasFactory;
 
     protected $fillable = [
-        'tenant_id',
         'user_id',
         'vehicle_id',
         'title',
@@ -22,11 +20,6 @@ class Ticket extends Model
     protected $casts = [
         'active' => 'boolean',
     ];
-
-    public function tenant()
-    {
-        return $this->belongsTo(Tenant::class);
-    }
 
     public function messages()
     {

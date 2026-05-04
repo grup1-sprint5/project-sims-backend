@@ -8,7 +8,6 @@ use App\Http\Requests\Tenant\UpdateTenantRequest;
 use App\Http\Resources\TenantResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 
 class TenantController extends Controller
 {
@@ -27,12 +26,10 @@ class TenantController extends Controller
         $this->authorize('viewAny', Tenant::class);
 
         $user = auth()->user();
-        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
-        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
 
         // TenantAdmin can only see their own tenant
-        if (!$user->isSuperAdmin() && $user->tenant_id) {
-            $tenant = Tenant::find($user->tenant_id);
+        if (!$user->isSuperAdmin() && function_exists('tenancy') && tenancy()->initialized) {
+            $tenant = tenancy()->tenant();
             return response()->json([
                 'data' => $tenant ? [new TenantResource($tenant)] : [],
             ]);
@@ -42,12 +39,10 @@ class TenantController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->input('search');
-            $query->where(function ($q) use ($search, $hasSlugColumn) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'ILIKE', "%{$search}%")
                   ->orWhere('id', 'ILIKE', "%{$search}%")
-                  ->when($hasSlugColumn, function ($qq) use ($search) {
-                      $qq->orWhere('slug', 'ILIKE', "%{$search}%");
-                  })
+                  ->orWhere('slug', 'ILIKE', "%{$search}%")
                   ->orWhere('email', 'ILIKE', "%{$search}%")
                   ->orWhere('tax_id', 'ILIKE', "%{$search}%");
             });
@@ -72,8 +67,8 @@ class TenantController extends Controller
 
     /**
      * Crear un nuevo tenant.
-     * The `slug` from the request becomes the tenant's primary key (`id`).
-     * stancl/tenancy automatically creates the PostgreSQL schema and runs
+    * The tenant `id` is a UUID (internal), while `slug` is used externally.
+    * stancl/tenancy automatically creates the PostgreSQL schema and runs
      * tenant migrations when the Tenant model is saved.
      */
     public function store(StoreTenantRequest $request): JsonResponse
@@ -81,25 +76,6 @@ class TenantController extends Controller
         $this->authorize('create', Tenant::class);
 
         $data = $request->validated();
-        $slug = (string) $data['slug'];
-
-        $centralConnection = (string) (config('tenancy.database.central_connection') ?? config('database.default') ?? 'pgsql');
-        $hasSlugColumn = Schema::connection($centralConnection)->hasColumn('tenants', 'slug');
-        $idColumnType = strtolower((string) Schema::connection($centralConnection)->getColumnType('tenants', 'id'));
-        $idLooksNumeric = preg_match('/(tinyint|smallint|mediumint|bigint|integer|int|serial)/', $idColumnType) === 1;
-
-        if ($hasSlugColumn) {
-            $data['slug'] = $slug;
-
-            // Hybrid schema support: if id is string-like, keep id aligned with slug.
-            if (!$idLooksNumeric) {
-                $data['id'] = $slug;
-            }
-        } else {
-            $data['id'] = $slug;
-            unset($data['slug']);
-        }
-
         $tenant = Tenant::create($data);
 
         return response()->json([

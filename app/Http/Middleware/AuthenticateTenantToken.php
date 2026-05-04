@@ -34,7 +34,7 @@ class AuthenticateTenantToken
             return $this->unauthenticated();
         }
 
-        $tenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
+        $tenantId = function_exists('tenant') && tenant() ? (string) tenant()->id : null;
         $abilities = is_array($accessToken->abilities) ? $accessToken->abilities : [];
 
         if ($tenantId && !in_array("tenant:{$tenantId}", $abilities, true)) {

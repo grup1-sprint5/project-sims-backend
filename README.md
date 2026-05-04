@@ -181,17 +181,3 @@ docker compose exec app php artisan tenants:seed --class="Database\\Seeders\\Dat
 
 - Token expired/invalid or tenant mismatch.
 - Login again and verify `X-Tenant` matches the intended organization.
-
-## FOR TEST ONLY: local domains on Windows
-
-If you test subdomains locally, edit hosts file as Administrator:
-
-1. Open `C:\Windows\System32\drivers\etc\hosts`
-2. Add entries:
-
-```text
-127.0.0.1 sims-corp.localhost
-127.0.0.1 ecomove.localhost
-```
-
-Remove entries when no longer needed.

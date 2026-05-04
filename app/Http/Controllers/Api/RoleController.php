@@ -22,11 +22,7 @@ class RoleController extends Controller
         $query = Role::with('permissions');
 
         if (!$user->isSuperAdmin()) {
-            $query->where('name', '!=', 'SuperAdmin')
-                ->where(function ($q) use ($user) {
-                    $q->whereNull('tenant_id')
-                        ->orWhere('tenant_id', $user->tenant_id);
-                });
+            $query->where('name', '!=', 'SuperAdmin');
         }
 
         if ($search = $request->input('search')) {
@@ -46,12 +42,10 @@ class RoleController extends Controller
         $this->authorize('create', Role::class);
 
         $data = $request->validated();
-        $user = auth()->user();
 
         $role = Role::create([
             'name' => $data['name'],
             'guard_name' => $data['guard_name'] ?? 'web',
-            'tenant_id' => $user->isSuperAdmin() ? null : $user->tenant_id,
         ]);
 
         if (!empty($data['permissions'])) {

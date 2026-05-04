@@ -33,7 +33,7 @@ class AuthController extends Controller
 
         $tenantId = null;
         if (function_exists('tenant') && tenant()) {
-            $tenantId = (string) tenant('id');
+            $tenantId = (string) tenant()->id;
         }
 
         $abilities = $tenantId ? ["tenant:{$tenantId}"] : ['tenant:central'];

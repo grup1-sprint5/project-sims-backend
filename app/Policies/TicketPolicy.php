@@ -25,7 +25,7 @@ class TicketPolicy
         if ($user->id === $ticket->user_id) { return true; }
         if (!$user->hasPermissionTo('tickets.view')) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $ticket->tenant_id === null || $ticket->tenant_id === $user->tenant_id;
+        return true;
     }
 
     /**
@@ -45,7 +45,7 @@ class TicketPolicy
         if ($user->id === $ticket->user_id) { return true; }
         if (!$user->hasPermissionTo('tickets.manage')) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $ticket->tenant_id === null || $ticket->tenant_id === $user->tenant_id;
+        return true;
     }
 
     /**
@@ -59,6 +59,6 @@ class TicketPolicy
 
         if (!$canDelete) { return false; }
         if ($user->isSuperAdmin()) { return true; }
-        return $ticket->tenant_id === null || $ticket->tenant_id === $user->tenant_id;
+        return true;
     }
 }

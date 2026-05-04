@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Middleware\InitializeTenancyByDomainOrHeader;
+use App\Http\Middleware\InitializeTenancyByHeader;
 use App\Http\Middleware\CheckTenantActive;
 
 use App\Http\Controllers\Api\UserController;
@@ -27,7 +27,7 @@ use App\Http\Controllers\TenantController;
 |
 */
 
-Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantActive::class])
+Route::middleware(['api', InitializeTenancyByHeader::class, CheckTenantActive::class])
     ->prefix('api')
     ->group(function () {
 
