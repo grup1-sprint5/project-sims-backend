@@ -20,3 +20,17 @@ use App\Http\Controllers\StripeWebhookController;
 Route::get('/health', fn () => response()->json(['status' => 'ok']));
 Route::post('/central/login', [CentralAuthController::class, 'login']);
 Route::post('/payments/stripe/webhook', [StripeWebhookController::class, 'handle']);
+
+// Public tenant registration request (no tenant context)
+use App\Http\Controllers\TenantRequestController;
+
+Route::post('/register-company', [TenantRequestController::class, 'store']);
+
+// Slug availability check
+Route::get('/tenant-slugs/check', [TenantRequestController::class, 'checkSlug']);
+
+// Admin endpoints for tenant requests (require auth + superadmin)
+Route::middleware(['auth:sanctum'])->group(function () {
+	Route::get('/tenant-requests', [TenantRequestController::class, 'index']);
+	Route::post('/tenant-requests/{id}/approve', [TenantRequestController::class, 'approve']);
+});
