@@ -45,7 +45,7 @@ class TenantRequestController extends Controller
         // Notify superadmin email that a request arrived
         $adminEmail = env('SUPERADMIN_EMAIL');
         if ($adminEmail) {
-            Mail::to($adminEmail)->queue(new NewTenantRequestMail($req));
+            Mail::to($adminEmail)->send(new NewTenantRequestMail($req));
         }
 
         return response()->json(['message' => 'Request received', 'data' => $req], 201);
@@ -112,7 +112,7 @@ class TenantRequestController extends Controller
 
         // Notify tenant by email that their tenant is ready
         try {
-            Mail::to($req->email)->queue(new TenantApprovedMail($req, $domain));
+            Mail::to($req->email)->send(new TenantApprovedMail($req, $domain));
         } catch (\Throwable $e) {
             report($e);
         }
