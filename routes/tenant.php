@@ -48,8 +48,9 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
         Route::middleware('auth.tenant-token')->group(function () {
 
             Route::post('/logout', [AuthController::class, 'logout']);
-            Route::get('/user', [AuthController::class, 'user']);
 
+            // Note: /user endpoint is defined in routes/api.php to work for both tenant and central users
+            
             // Users management (Authenticated only)
             Route::post('/users/{user}/restore', [UserController::class, 'restore']);
             Route::apiResource('users', UserController::class)->except(['store']);

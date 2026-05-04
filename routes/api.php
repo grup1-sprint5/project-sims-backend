@@ -30,12 +30,12 @@ Route::post('/register-company', [TenantRequestController::class, 'store']);
 // Slug availability check
 Route::get('/tenant-slugs/check', [TenantRequestController::class, 'checkSlug']);
 
+// Central user endpoint (accepts both central superadmin and tenant users with valid tokens)
+use App\Http\Controllers\Api\AuthController;
+Route::middleware(['auth:sanctum'])->get('/user', [AuthController::class, 'user']);
+
 // Admin endpoints for tenant requests (require auth + superadmin)
 Route::middleware(['auth:sanctum'])->group(function () {
 	Route::get('/tenant-requests', [TenantRequestController::class, 'index']);
 	Route::post('/tenant-requests/{id}/approve', [TenantRequestController::class, 'approve']);
 });
-
-// Central user endpoint (for central/superadmin authentication)
-use App\Http\Controllers\Api\CentralUserController;
-Route::middleware(['auth:sanctum'])->get('/user', [CentralUserController::class, 'show']);
