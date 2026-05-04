@@ -22,9 +22,15 @@ class TenantRequestController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $existing = TenantRequest::where('slug', $validated['slug'])->orWhere('email', $validated['email'])->first();
-        if ($existing) {
+        // Ensure slug/email not already used by a Tenant or an existing request
+        $existingRequest = TenantRequest::where('slug', $validated['slug'])->orWhere('email', $validated['email'])->first();
+        if ($existingRequest) {
             return response()->json(['message' => 'A request with that slug or email already exists.'], 409);
+        }
+
+        $existingTenant = \App\Models\Tenant::find($validated['slug']);
+        if ($existingTenant) {
+            return response()->json(['message' => 'Tenant with that slug already exists. Choose a different slug.'], 409);
         }
 
         $req = TenantRequest::create([
