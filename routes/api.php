@@ -35,3 +35,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 	Route::get('/tenant-requests', [TenantRequestController::class, 'index']);
 	Route::post('/tenant-requests/{id}/approve', [TenantRequestController::class, 'approve']);
 });
+
+// Central user endpoint (for central/superadmin authentication)
+use App\Http\Controllers\Api\AuthController;
+Route::middleware(['auth:sanctum'])->get('/user', [AuthController::class, 'user']);
