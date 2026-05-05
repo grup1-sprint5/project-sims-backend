@@ -4,19 +4,43 @@ use Illuminate\Support\Facades\Route;
 
 $distRoot = '/var/www/sims-front/dist';
 
+$mimeTypes = [
+    'js'    => 'application/javascript',
+    'mjs'   => 'application/javascript',
+    'css'   => 'text/css',
+    'svg'   => 'image/svg+xml',
+    'png'   => 'image/png',
+    'jpg'   => 'image/jpeg',
+    'jpeg'  => 'image/jpeg',
+    'gif'   => 'image/gif',
+    'webp'  => 'image/webp',
+    'ico'   => 'image/x-icon',
+    'woff'  => 'font/woff',
+    'woff2' => 'font/woff2',
+    'ttf'   => 'font/ttf',
+    'otf'   => 'font/otf',
+    'json'  => 'application/json',
+];
+
+$serveFile = function (string $path) use ($mimeTypes) {
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    $mime = $mimeTypes[$ext] ?? mime_content_type($path);
+    return response()->file($path, ['Content-Type' => $mime]);
+};
+
 // Serve Vue SPA static assets securely
-Route::get('/assets/{file}', function (string $file) use ($distRoot) {
+Route::get('/assets/{file}', function (string $file) use ($distRoot, $serveFile) {
     $path = realpath($distRoot . '/assets/' . $file);
     if ($path && str_starts_with($path, $distRoot) && is_file($path)) {
-        return response()->file($path);
+        return $serveFile($path);
     }
     abort(404);
 })->where('file', '[^.][^/].*');
 
-Route::get('/branding/{file}', function (string $file) use ($distRoot) {
+Route::get('/branding/{file}', function (string $file) use ($distRoot, $serveFile) {
     $path = realpath($distRoot . '/branding/' . $file);
     if ($path && str_starts_with($path, $distRoot) && is_file($path)) {
-        return response()->file($path);
+        return $serveFile($path);
     }
     abort(404);
 })->where('file', '[^.][^/].*');
