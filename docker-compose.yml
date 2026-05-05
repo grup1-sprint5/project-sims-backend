@@ -8,6 +8,7 @@ services:
     volumes:
       - ./:/var/www/html
       - vendor:/var/www/html/vendor
+      - /var/www/sims-front/dist:/var/www/sims-front/dist:ro
     working_dir: /var/www/html
     env_file:
       - .env
