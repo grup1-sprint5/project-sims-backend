@@ -112,12 +112,18 @@ class TenantRequestController extends Controller
 
         // Notify tenant by email that their tenant is ready
         try {
-            Mail::to($req->email)->send(new TenantApprovedMail($req, $domain));
+            $mailable = new TenantApprovedMail($req, $domain);
+            Mail::to($req->email)->send($mailable);
+            \Log::info("Approval email sent to {$req->email} for tenant {$req->slug}");
         } catch (\Throwable $e) {
+            \Log::error("Failed to send approval email: " . $e->getMessage());
             report($e);
         }
 
-        return response()->json(['message' => 'Approved', 'tenant' => $tenant, 'domain' => $domain]);
+        // Reload to get updated model
+        $req->refresh();
+        
+        return response()->json(['message' => 'Approved', 'tenant' => $tenant, 'domain' => $domain, 'request' => $req]);
     }
 
     // Public: check if a slug is available (not used by Tenant or pending request)
