@@ -25,7 +25,13 @@ $mimeTypes = [
 $serveFile = function (string $path) use ($mimeTypes) {
     $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
     $mime = $mimeTypes[$ext] ?? mime_content_type($path);
-    return response()->file($path, ['Content-Type' => $mime]);
+    return response()->stream(function () use ($path) {
+        readfile($path);
+    }, 200, [
+        'Content-Type'   => $mime,
+        'Content-Length' => filesize($path),
+        'Cache-Control'  => 'public, max-age=31536000, immutable',
+    ]);
 };
 
 // Serve Vue SPA static assets securely
