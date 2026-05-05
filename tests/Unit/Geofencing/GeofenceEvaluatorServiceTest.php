@@ -4,7 +4,6 @@ namespace Tests\Unit\Geofencing;
 
 use App\Models\Geofence;
 use App\Models\GeofenceAssignment;
-use App\Models\Tenant;
 use App\Models\Vehicle;
 use App\Services\Geofencing\GeofenceEvaluatorService;
 use Carbon\CarbonImmutable;
@@ -15,19 +14,28 @@ class GeofenceEvaluatorServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // This unit test exercises tenant tables but does not bootstrap tenancy.
+        $this->artisan('migrate', [
+            '--path' => database_path('migrations/tenant/2026_01_19_000040_create_vehicles_table.php'),
+            '--realpath' => true,
+        ])->run();
+
+        $this->artisan('migrate', [
+            '--path' => database_path('migrations/tenant/2026_04_23_120000_create_geofencing_tables.php'),
+            '--realpath' => true,
+        ])->run();
+    }
+
     public function test_it_creates_enter_and_exit_events_without_duplicates(): void
     {
-        $tenant = Tenant::create([
-            'id' => 'tenant-unit',
-            'name' => 'Tenant Unit',
-            'slug' => 'tenant-unit',
-            'tax_id' => 'B12345670',
-            'email' => 'unit@test.com',
-            'active' => true,
-        ]);
+        $tenantId = 'tenant-unit';
 
         $vehicle = Vehicle::withoutGlobalScopes()->create([
-            'tenant_id' => $tenant->id,
+            'tenant_id' => $tenantId,
             'license_plate' => 'UNIT-100',
             'brand' => 'Renault',
             'model' => 'Zoe',
@@ -35,7 +43,7 @@ class GeofenceEvaluatorServiceTest extends TestCase
         ]);
 
         $geofence = Geofence::create([
-            'tenant_id' => $tenant->id,
+            'tenant_id' => $tenantId,
             'name' => 'Test Circle',
             'type' => 'circle',
             'center_lat' => 41.3851,
@@ -47,7 +55,7 @@ class GeofenceEvaluatorServiceTest extends TestCase
         ]);
 
         GeofenceAssignment::create([
-            'tenant_id' => $tenant->id,
+            'tenant_id' => $tenantId,
             'geofence_id' => $geofence->id,
             'assign_type' => 'vehicle',
             'assign_id' => (string) $vehicle->id,

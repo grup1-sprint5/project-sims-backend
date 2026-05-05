@@ -104,8 +104,16 @@ class GeofenceEvaluatorService
             return true;
         }
 
-        $timezone = $schedule['timezone'] ?? 'UTC';
-        $inTz = $now->setTimezone($timezone);
+        $timezone = (string) ($schedule['timezone'] ?? 'UTC');
+        if (!in_array($timezone, \DateTimeZone::listIdentifiers(), true)) {
+            $timezone = 'UTC';
+        }
+
+        try {
+            $inTz = $now->setTimezone($timezone);
+        } catch (\Throwable $exception) {
+            $inTz = $now->setTimezone('UTC');
+        }
 
         $days = $schedule['days'] ?? null;
         if (is_array($days) && $days !== []) {
@@ -126,6 +134,10 @@ class GeofenceEvaluatorService
         $startMinutes = $this->hourStringToMinutes((string) $start);
         $endMinutes = $this->hourStringToMinutes((string) $end);
 
+        if ($startMinutes === null || $endMinutes === null) {
+            return true;
+        }
+
         if ($startMinutes <= $endMinutes) {
             return $currentMinutes >= $startMinutes && $currentMinutes <= $endMinutes;
         }
@@ -133,9 +145,18 @@ class GeofenceEvaluatorService
         return $currentMinutes >= $startMinutes || $currentMinutes <= $endMinutes;
     }
 
-    private function hourStringToMinutes(string $hour): int
+    private function hourStringToMinutes(string $hour): ?int
     {
+        if (!preg_match('/^\d{2}:\d{2}$/', $hour)) {
+            return null;
+        }
+
         [$h, $m] = explode(':', $hour);
+
+        if ((int) $h > 23 || (int) $m > 59) {
+            return null;
+        }
+
         return ((int) $h) * 60 + ((int) $m);
     }
 

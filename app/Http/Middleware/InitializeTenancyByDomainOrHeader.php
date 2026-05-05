@@ -97,6 +97,33 @@ class InitializeTenancyByDomainOrHeader
             return $next($request);
         }
 
+        // 3. Optional fallback for single-tenant deployments (e.g., a VPS)
+        // where the frontend may not send X-Tenant and no custom domains are configured.
+        $defaultTenantKey = env('TENANCY_DEFAULT_TENANT');
+        if (is_string($defaultTenantKey) && $defaultTenantKey !== '') {
+            $tenantModel = config('tenancy.tenant_model');
+            $tenant = $tenantModel::find($defaultTenantKey);
+
+            if ($tenant) {
+                try {
+                    tenancy()->initialize($tenant);
+                } catch (Throwable $e) {
+                    report($e);
+
+                    if ($request->expectsJson() || $request->is('api/*')) {
+                        return response()->json([
+                            'message' => 'Tenant initialization failed.',
+                            'error' => 'tenant_initialization_failed',
+                        ], 500);
+                    }
+
+                    throw $e;
+                }
+
+                return $next($request);
+            }
+        }
+
         // Neither strategy resolved a tenant.
         if ($request->expectsJson() || $request->is('api/*')) {
             return response()->json([

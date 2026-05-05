@@ -10,6 +10,8 @@ class TenantDatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $currentTenantId = function_exists('tenant') && tenant() ? (string) tenant('id') : null;
+
         // 1. Seed global things inside this tenant
         $this->call([
             PermissionsSeeder::class,
@@ -18,37 +20,55 @@ class TenantDatabaseSeeder extends Seeder
 
         $password = Hash::make('password');
 
-        // 2. Create standard users for this specific tenant
-        // Notice: No tenant_id needed here because we are ALREADY inside the tenant connection/context
-        User::firstOrCreate(
+        // 2. Create standard users for this specific tenant.
+        // Seeders must be idempotent even if users are soft-deleted.
+        $admin = User::withoutGlobalScopes()->withTrashed()->updateOrCreate(
             ['email' => 'admin@test.com'],
             [
                 'name' => 'Admin User',
                 'username' => 'admin',
                 'password' => $password,
                 'active' => true,
+                'tenant_id' => $currentTenantId,
+                'deleted_at' => null,
             ]
-        )->assignRole('SuperAdmin');
+        );
+        if (method_exists($admin, 'restore') && $admin->trashed()) {
+            $admin->restore();
+        }
+        $admin->assignRole('SuperAdmin');
 
-        User::firstOrCreate(
+        $client = User::withoutGlobalScopes()->withTrashed()->updateOrCreate(
             ['email' => 'client@test.com'],
             [
                 'name' => 'Client User',
                 'username' => 'client',
                 'password' => $password,
                 'active' => true,
+                'tenant_id' => $currentTenantId,
+                'deleted_at' => null,
             ]
-        )->assignRole('Client');
+        );
+        if (method_exists($client, 'restore') && $client->trashed()) {
+            $client->restore();
+        }
+        $client->assignRole('Client');
 
-        User::firstOrCreate(
+        $maint = User::withoutGlobalScopes()->withTrashed()->updateOrCreate(
             ['email' => 'maint@test.com'],
             [
                 'name' => 'Maintenance User',
                 'username' => 'maint',
                 'password' => $password,
                 'active' => true,
+                'tenant_id' => $currentTenantId,
+                'deleted_at' => null,
             ]
-        )->assignRole('Maintenance');
+        );
+        if (method_exists($maint, 'restore') && $maint->trashed()) {
+            $maint->restore();
+        }
+        $maint->assignRole('Maintenance');
 
         // Add additional test data specifically for this tenant
         $this->call([

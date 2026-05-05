@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class GeofenceApiTest extends TestCase
@@ -26,6 +27,11 @@ class GeofenceApiTest extends TestCase
     {
         parent::setUp();
 
+        $this->artisan('migrate', [
+            '--path' => database_path('migrations/tenant'),
+            '--realpath' => true,
+        ])->run();
+
         $this->withoutMiddleware([
             InitializeTenancyByDomainOrHeader::class,
             CheckTenantActive::class,
@@ -34,29 +40,29 @@ class GeofenceApiTest extends TestCase
 
         Gate::before(fn () => true);
 
-        $this->tenant1 = Tenant::firstOrCreate([
-            'id' => 'geo-sims-corp',
-        ], [
+        $tenant1Id = 'geo-sims-' . Str::lower(Str::random(8));
+        $tenant2Id = 'geo-eco-' . Str::lower(Str::random(8));
+
+        $this->tenant1 = Tenant::withoutEvents(fn () => Tenant::create([
+            'id' => $tenant1Id,
             'name' => 'SIMS Corp',
-            'slug' => 'geo-sims-corp',
+            'slug' => $tenant1Id,
             'tax_id' => 'B12345678',
             'email' => 'info@simscorp.com',
             'active' => true,
-        ]);
+        ]));
 
-        $this->tenant2 = Tenant::firstOrCreate([
-            'id' => 'geo-ecomove',
-        ], [
+        $this->tenant2 = Tenant::withoutEvents(fn () => Tenant::create([
+            'id' => $tenant2Id,
             'name' => 'EcoMove',
-            'slug' => 'geo-ecomove',
+            'slug' => $tenant2Id,
             'tax_id' => 'B87654321',
             'email' => 'info@ecomove.es',
             'active' => true,
-        ]);
+        ]));
 
-        $this->tenantAdmin1 = User::withoutGlobalScopes()->firstOrCreate([
-            'email' => 'geofence-admin-sims@test.com',
-        ], [
+        $this->tenantAdmin1 = User::withoutGlobalScopes()->create([
+            'email' => 'geofence-admin-sims+' . Str::lower(Str::random(6)) . '@test.com',
             'name' => 'Admin SIMS',
             'username' => 'geo_admin_sims',
             'password' => 'password',
@@ -64,9 +70,8 @@ class GeofenceApiTest extends TestCase
             'tenant_id' => $this->tenant1->id,
         ]);
 
-        $this->tenantAdmin2 = User::withoutGlobalScopes()->firstOrCreate([
-            'email' => 'geofence-admin-eco@test.com',
-        ], [
+        $this->tenantAdmin2 = User::withoutGlobalScopes()->create([
+            'email' => 'geofence-admin-eco+' . Str::lower(Str::random(6)) . '@test.com',
             'name' => 'Admin ECO',
             'username' => 'geo_admin_eco',
             'password' => 'password',
@@ -74,9 +79,8 @@ class GeofenceApiTest extends TestCase
             'tenant_id' => $this->tenant2->id,
         ]);
 
-        $this->vehicle1 = Vehicle::withoutGlobalScopes()->firstOrCreate([
-            'license_plate' => 'GEO-1234',
-        ], [
+        $this->vehicle1 = Vehicle::withoutGlobalScopes()->create([
+            'license_plate' => 'GEO-' . random_int(1000, 9999),
             'tenant_id' => $this->tenant1->id,
             'brand' => 'Toyota',
             'model' => 'Yaris',

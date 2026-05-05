@@ -62,6 +62,7 @@ return [
          * the central `tenants` table remains accessible from tenant context.
          */
         'managers' => [
+            'sqlite' => Stancl\Tenancy\TenantDatabaseManagers\SQLiteDatabaseManager::class,
             'pgsql' => App\Tenancy\PostgreSQLSchemaManager::class,
         ],
     ],
