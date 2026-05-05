@@ -3,6 +3,16 @@ set -e
 
 cd /var/www/html
 
+# Ensure Laravel writable directories exist before the app starts.
+mkdir -p \
+  /var/www/html/storage/framework/cache \
+  /var/www/html/storage/framework/sessions \
+  /var/www/html/storage/framework/views \
+  /var/www/html/storage/logs \
+  /var/www/html/bootstrap/cache
+
+chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache || true
+
 RUN_MIGRATIONS_VALUE="${RUN_MIGRATIONS:-}"
 RUN_TENANT_MIGRATIONS_VALUE="${RUN_TENANT_MIGRATIONS:-}"
 
