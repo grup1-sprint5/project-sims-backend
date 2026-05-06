@@ -183,16 +183,22 @@ class UserController extends Controller
 
         $user = User::create($data);
 
+        $authUser = auth()->user();
         if ($roleId) {
             $role = Role::find($roleId);
             if ($role) {
-                $authUser = auth()->user();
                 $isSuperAdmin = $authUser && $authUser->isSuperAdmin();
                 if (strtolower($role->name) === 'superadmin' && !$isSuperAdmin) {
                     $user->delete();
                     return response()->json(['message' => 'Only SuperAdmin can assign the SuperAdmin role.'], 403);
                 }
                 $user->assignRole($role);
+            }
+        } elseif (!$authUser) {
+            // Public self-registration: assign Client role by default.
+            $clientRole = Role::where('name', 'Client')->first();
+            if ($clientRole) {
+                $user->assignRole($clientRole);
             }
         }
 
