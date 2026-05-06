@@ -21,12 +21,14 @@ class RoleController extends Controller
         $user = auth()->user();
         $query = Role::with('permissions');
 
-        if (!$user->isSuperAdmin()) {
-            $query->where('name', '!=', 'SuperAdmin')
-                ->where(function ($q) use ($user) {
-                    $q->whereNull('tenant_id')
-                        ->orWhere('tenant_id', $user->tenant_id);
-                });
+        // Central SuperAdmin (no tenant_id and tenancy not initialized) sees all roles.
+        // Any user with a tenant context (tenant_id set or tenancy initialized) is a tenant user.
+        $isCentralSuperAdmin = empty($user->tenant_id)
+            && !(function_exists('tenancy') && tenancy()->initialized)
+            && $user->isSuperAdmin();
+
+        if (!$isCentralSuperAdmin) {
+            $query->where('name', '!=', 'SuperAdmin');
         }
 
         if ($search = $request->input('search')) {

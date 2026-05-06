@@ -25,15 +25,19 @@ class UserController extends Controller
 
         $authUser = auth()->user();
 
-        // Only the central SuperAdmin (tenancy NOT initialized) sees all tenants.
-        if ($authUser && $authUser->isSuperAdmin()) {
-            return $this->indexForSuperAdmin($request);
+        // Determine tenant context: from active tenancy or from the user's own tenant_id.
+        $tenantId = null;
+        if (function_exists('tenancy') && tenancy()->initialized) {
+            $tenantId = (string) tenant('id');
+        } elseif (!empty($authUser->tenant_id)) {
+            $tenantId = (string) $authUser->tenant_id;
         }
 
-        // Determine the tenant scope from active tenancy context or the user's own tenant_id.
-        $tenantId = (function_exists('tenancy') && tenancy()->initialized)
-            ? (string) tenant('id')
-            : ($authUser->tenant_id ?? null);
+        // Only call indexForSuperAdmin for truly central SuperAdmin:
+        // must have SuperAdmin role AND no tenant context (neither tenancy nor tenant_id).
+        if (!$tenantId && $authUser && $authUser->isSuperAdmin()) {
+            return $this->indexForSuperAdmin($request);
+        }
 
         if (!$tenantId) {
             return response()->json(['message' => 'Unauthorized'], 403);
