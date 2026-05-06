@@ -171,6 +171,8 @@ class UserController extends Controller
                 return response()->json(['message' => 'Tenant not found'], 404);
             }
             tenancy()->initialize($tenant);
+            // Explicitly set tenant_id so BelongsToTenant scope can find the user.
+            $data['tenant_id'] = $tenantId;
         }
 
         $user = User::create($data);
