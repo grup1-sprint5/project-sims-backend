@@ -157,10 +157,21 @@ class UserController extends Controller
     {
         $data = $request->validated();
 
-        $roleId = $data['role_id'] ?? null;
-        unset($data['role_id']);
+        $roleId   = $data['role_id']   ?? null;
+        $tenantId = $data['tenant_id'] ?? null;
+        unset($data['role_id'], $data['tenant_id']);
 
         $data['password'] = Hash::make($data['password']);
+
+        // When a tenant_id is provided (superadmin creating a user for a specific tenant),
+        // switch to that tenant's database so the user lands in the right schema.
+        if ($tenantId) {
+            $tenant = \App\Models\Tenant::find($tenantId);
+            if (!$tenant) {
+                return response()->json(['message' => 'Tenant not found'], 404);
+            }
+            tenancy()->initialize($tenant);
+        }
 
         $user = User::create($data);
 
@@ -171,7 +182,7 @@ class UserController extends Controller
             }
         }
 
-        return (new UserResource($user->load('roles', 'tenant')))->response()->setStatusCode(201);
+        return (new UserResource($user->load('roles')))->response()->setStatusCode(201);
     }
 
     /**
