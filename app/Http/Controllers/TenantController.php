@@ -29,7 +29,7 @@ class TenantController extends Controller
 
         // TenantAdmin can only see their own tenant
         if (!$user->isSuperAdmin() && $user->tenant_id) {
-            $tenant = Tenant::find($user->tenant_id);
+            $tenant = Tenant::with('domains')->find($user->tenant_id);
             return response()->json([
                 'data' => $tenant ? [new TenantResource($tenant)] : [],
             ]);
@@ -58,7 +58,7 @@ class TenantController extends Controller
             ? $request->input('dir')
             : 'desc';
 
-        $tenants = $query->orderBy($sortField, $sortDir)
+        $tenants = $query->with('domains')->orderBy($sortField, $sortDir)
                          ->paginate($request->input('per_page', 15));
 
         return TenantResource::collection($tenants)->response();
@@ -92,6 +92,8 @@ class TenantController extends Controller
     public function show(Tenant $tenant): JsonResponse
     {
         $this->authorize('view', $tenant);
+
+        $tenant->loadMissing('domains');
 
         return response()->json([
             'data' => new TenantResource($tenant),
@@ -135,6 +137,7 @@ class TenantController extends Controller
         $this->authorize('update', $tenant);
 
         $tenant->update(['active' => !$tenant->active]);
+        $tenant->loadMissing('domains');
 
         return response()->json([
             'message' => $tenant->active ? 'Tenant activado' : 'Tenant desactivado',

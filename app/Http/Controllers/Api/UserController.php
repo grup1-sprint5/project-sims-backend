@@ -182,6 +182,12 @@ class UserController extends Controller
         if ($roleId) {
             $role = Role::find($roleId);
             if ($role) {
+                $authUser = auth()->user();
+                $isSuperAdmin = $authUser && $authUser->isSuperAdmin();
+                if (strtolower($role->name) === 'superadmin' && !$isSuperAdmin) {
+                    $user->delete();
+                    return response()->json(['message' => 'Only SuperAdmin can assign the SuperAdmin role.'], 403);
+                }
                 $user->assignRole($role);
             }
         }
