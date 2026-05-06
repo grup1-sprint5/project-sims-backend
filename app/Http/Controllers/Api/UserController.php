@@ -62,34 +62,75 @@ class UserController extends Controller
 
     private function indexForSuperAdmin(Request $request)
     {
-        // All tenant users live in the central DB with tenant_id set.
-        // Query directly without initializing per-tenant tenancy to avoid
-        // silent skips on tenancy init failures.
-        $query = User::with(['roles', 'tenant'])
-            ->whereNotNull('tenant_id');
+        $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
+        $rows = collect();
 
-        if ($search = $request->input('search')) {
-            $query->where(fn($q) => $q->where('name', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%"));
+        foreach ($tenants as $tenant) {
+            try {
+                // Always end any previous tenant context before switching schemas.
+                if (function_exists('tenancy') && tenancy()->initialized) {
+                    tenancy()->end();
+                }
+                tenancy()->initialize($tenant);
+            } catch (\Throwable $e) {
+                \Log::error("SuperAdmin user list: failed to initialize tenant {$tenant->id}: " . $e->getMessage());
+                continue;
+            }
+
+            // withoutGlobalScopes() bypasses BelongsToTenant scope so users
+            // missing tenant_id in the schema are still returned.
+            $query = User::withoutGlobalScopes()->with('roles');
+
+            if ($search = $request->input('search')) {
+                $query->where(fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
+            }
+            if ($role = $request->input('role')) {
+                $query->whereHas('roles', fn($q) => $q->where('name', $role));
+            }
+            if (!is_null($request->input('active'))) {
+                $query->where('active', (bool) $request->input('active'));
+            }
+
+            $tenantCopy = $tenant;
+            $rows = $rows->concat($query->get()->map(function (User $user) use ($tenantCopy) {
+                return [
+                    'id'         => $user->id,
+                    'name'       => $user->name,
+                    'username'   => $user->username,
+                    'email'      => $user->email,
+                    'active'     => (bool) $user->active,
+                    'roles'      => $user->roles->map(fn($r) => [
+                        'id'         => $r->id,
+                        'name'       => $r->name,
+                        'guard_name' => $r->guard_name,
+                    ])->values(),
+                    'tenant'     => ['id' => $tenantCopy->id, 'name' => $tenantCopy->name],
+                    'tenant_id'  => $tenantCopy->id,
+                    'created_at' => $user->created_at?->toIso8601String(),
+                    'updated_at' => $user->updated_at?->toIso8601String(),
+                ];
+            }));
         }
 
-        if ($role = $request->input('role')) {
-            $query->whereHas('roles', fn($q) => $q->where('name', $role));
-        }
-
-        if (!is_null($request->input('active'))) {
-            $query->where('active', (bool) $request->input('active'));
-        }
+        tenancy()->end();
 
         if ($tenantFilter = $request->input('tenant_id')) {
-            $query->where('tenant_id', $tenantFilter);
+            $rows = $rows->where('tenant_id', $tenantFilter)->values();
         }
 
+        $rows = $rows->sortByDesc('created_at')->values();
+
         $perPage = min((int) $request->input('per_page', 15), 100);
+        $page    = max((int) $request->input('page', 1), 1);
+        $total   = $rows->count();
+        $slice   = $rows->slice(($page - 1) * $perPage, $perPage)->values();
 
-        $paginator = $query->orderByDesc('created_at')->paginate($perPage);
+        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            $slice, $total, $perPage, $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
-        return UserResource::collection($paginator)->response();
+        return response()->json($paginator);
     }
 
     /**
