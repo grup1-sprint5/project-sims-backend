@@ -28,7 +28,7 @@ class TenantDatabaseSeeder extends Seeder
                 'password' => $password,
                 'active' => true,
             ]
-        )->assignRole('SuperAdmin');
+        )->syncRoles(['TenantAdmin']);
 
         User::firstOrCreate(
             ['email' => 'client@test.com'],

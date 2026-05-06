@@ -101,10 +101,15 @@ class User extends Authenticatable
     }
 
     /**
-     * Check if the user has the SuperAdmin role.
+     * Check if the user is the central SuperAdmin (not a tenant-scoped admin).
+     * Returns false when tenancy is active to prevent tenant SuperAdmin users
+     * from accessing cross-tenant data.
      */
     public function isSuperAdmin(): bool
     {
+        if (function_exists('tenancy') && tenancy()->initialized) {
+            return false;
+        }
         return $this->hasRole('SuperAdmin');
     }
 

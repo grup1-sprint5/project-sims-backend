@@ -25,26 +25,28 @@ class UserController extends Controller
 
         $authUser = auth()->user();
 
-        // SuperAdmin sees all users from all other tenants
+        // Only the central SuperAdmin (tenancy NOT initialized) sees all tenants.
         if ($authUser && $authUser->isSuperAdmin()) {
             return $this->indexForSuperAdmin($request);
         }
 
-        $query = User::with(['roles', 'tenant']);
-        
-        // Force isolation for non-superadmins, even if TenantScope fails for some reason
-        if (!$authUser->isSuperAdmin() && $authUser->tenant_id) {
-            $query->where('tenant_id', $authUser->tenant_id);
+        // Determine the tenant scope from active tenancy context or the user's own tenant_id.
+        $tenantId = (function_exists('tenancy') && tenancy()->initialized)
+            ? (string) tenant('id')
+            : ($authUser->tenant_id ?? null);
+
+        if (!$tenantId) {
+            return response()->json(['message' => 'Unauthorized'], 403);
         }
+
+        $query = User::with(['roles', 'tenant'])
+            ->where('tenant_id', $tenantId);
 
         if ($search = $request->input('search')) {
             $query->where(fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
         }
         if ($role = $request->input('role')) {
             $query->whereHas('roles', fn($q) => $q->where('name', $role));
-        }
-        if ($tenant = $request->input('tenant_id')) {
-            $query->where('tenant_id', $tenant);
         }
         if (!is_null($request->input('active'))) {
             $query->where('active', (bool) $request->input('active'));
