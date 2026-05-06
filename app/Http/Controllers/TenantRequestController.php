@@ -6,8 +6,8 @@ use App\Mail\NewTenantRequestMail;
 use App\Mail\TenantApprovedMail;
 use App\Models\Tenant;
 use App\Models\TenantRequest;
+use App\Services\TenantProvisioningService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
 
 class TenantRequestController extends Controller
@@ -85,28 +85,8 @@ class TenantRequestController extends Controller
 
         $tenant = Tenant::create($tenantData);
 
-        // Determine base domain
-        $central = config('tenancy.central_domains', []);
-        $baseDomain = null;
-        foreach ($central as $d) {
-            if (str_contains($d, '.') && !in_array($d, ['127.0.0.1', 'localhost'], true)) {
-                $baseDomain = $d;
-                break;
-            }
-        }
-
-        $domain = null;
-        if ($baseDomain) {
-            $domain = $tenant->id . '.' . $baseDomain;
-            $tenant->domains()->create(['domain' => $domain]);
-        }
-
-        // Run tenant migrations for this tenant
-        try {
-            Artisan::call('tenants:migrate', ['--tenants' => $tenant->id, '--force' => true]);
-        } catch (\Throwable $e) {
-            report($e);
-        }
+        $provisioning = app(TenantProvisioningService::class)->provision($tenant);
+        $domain = $provisioning['domains'][0] ?? null;
 
         $req->update(['status' => 'approved', 'approved_at' => now(), 'domain' => $domain]);
 
@@ -123,7 +103,15 @@ class TenantRequestController extends Controller
         // Reload to get updated model
         $req->refresh();
         
-        return response()->json(['message' => 'Approved', 'tenant' => $tenant, 'domain' => $domain, 'request' => $req]);
+        return response()->json([
+            'message' => 'Approved',
+            'tenant' => $tenant,
+            'domain' => $domain,
+            'domains' => $provisioning['domains'],
+            'credentials' => $provisioning['credentials'],
+            'default_password' => $provisioning['password'],
+            'request' => $req,
+        ]);
     }
 
     // Public: check if a slug is available (not used by Tenant or pending request)
