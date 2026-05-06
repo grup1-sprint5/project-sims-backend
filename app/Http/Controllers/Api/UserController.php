@@ -9,7 +9,9 @@ use App\Http\Resources\UserResource;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
@@ -62,64 +64,84 @@ class UserController extends Controller
 
     private function indexForSuperAdmin(Request $request)
     {
-        $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
-        $rows = collect();
+        $prefix  = config('tenancy.database.prefix', 'tenant_');
+        $tenants = Tenant::query()->where('id', '!=', 'central')->get(['id', 'name']);
+        $rows    = collect();
+        $search  = $request->input('search');
+        $roleFilter   = $request->input('role');
+        $activeFilter = $request->input('active');
 
         foreach ($tenants as $tenant) {
+            $schema = '"' . $prefix . $tenant->id . '"';
+
             try {
-                // Always end any previous tenant context before switching schemas.
-                if (function_exists('tenancy') && tenancy()->initialized) {
-                    tenancy()->end();
+                // Query users directly via schema-qualified tables — no tenancy init needed.
+                $userQuery = DB::table(DB::raw("{$schema}.users as u"))
+                    ->whereNull('u.deleted_at');
+
+                if ($search) {
+                    $userQuery->where(fn($q) => $q->where('u.name', 'ilike', "%{$search}%")
+                        ->orWhere('u.email', 'ilike', "%{$search}%"));
                 }
-                tenancy()->initialize($tenant);
+                if (!is_null($activeFilter)) {
+                    $userQuery->where('u.active', (bool) $activeFilter);
+                }
+                if ($roleFilter) {
+                    $userQuery->whereExists(function ($sub) use ($schema, $roleFilter) {
+                        $sub->select(DB::raw(1))
+                            ->from(DB::raw("{$schema}.model_has_roles as mhr"))
+                            ->join(DB::raw("{$schema}.roles as rf"), 'rf.id', '=', 'mhr.role_id')
+                            ->whereColumn('mhr.model_id', 'u.id')
+                            ->where('mhr.model_type', 'App\\Models\\User')
+                            ->where('rf.name', $roleFilter);
+                    });
+                }
+
+                $users = $userQuery->get();
+
+                // Load roles for all users in this schema in one query.
+                $userIds = $users->pluck('id')->toArray();
+                $roles   = DB::table(DB::raw("{$schema}.model_has_roles as mhr"))
+                    ->join(DB::raw("{$schema}.roles as r"), 'r.id', '=', 'mhr.role_id')
+                    ->whereIn('mhr.model_id', $userIds)
+                    ->where('mhr.model_type', 'App\\Models\\User')
+                    ->select('mhr.model_id', 'r.id as role_id', 'r.name as role_name', 'r.guard_name')
+                    ->get()
+                    ->groupBy('model_id');
+
             } catch (\Throwable $e) {
-                \Log::error("SuperAdmin user list: failed to initialize tenant {$tenant->id}: " . $e->getMessage());
+                Log::error("SuperAdmin user list: schema {$schema} error: " . $e->getMessage());
                 continue;
             }
 
-            // withoutGlobalScopes() bypasses BelongsToTenant scope so users
-            // missing tenant_id in the schema are still returned.
-            $query = User::withoutGlobalScopes()->with('roles');
-
-            if ($search = $request->input('search')) {
-                $query->where(fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
-            }
-            if ($role = $request->input('role')) {
-                $query->whereHas('roles', fn($q) => $q->where('name', $role));
-            }
-            if (!is_null($request->input('active'))) {
-                $query->where('active', (bool) $request->input('active'));
-            }
-
             $tenantCopy = $tenant;
-            $rows = $rows->concat($query->get()->map(function (User $user) use ($tenantCopy) {
+            $rows = $rows->concat($users->map(function ($user) use ($tenantCopy, $roles) {
+                $userRoles = ($roles->get($user->id) ?? collect())->map(fn($r) => [
+                    'id'         => $r->role_id,
+                    'name'       => $r->role_name,
+                    'guard_name' => $r->guard_name,
+                ])->values();
+
                 return [
                     'id'         => $user->id,
                     'name'       => $user->name,
-                    'username'   => $user->username,
+                    'username'   => $user->username ?? null,
                     'email'      => $user->email,
                     'active'     => (bool) $user->active,
-                    'roles'      => $user->roles->map(fn($r) => [
-                        'id'         => $r->id,
-                        'name'       => $r->name,
-                        'guard_name' => $r->guard_name,
-                    ])->values(),
+                    'roles'      => $userRoles,
                     'tenant'     => ['id' => $tenantCopy->id, 'name' => $tenantCopy->name],
                     'tenant_id'  => $tenantCopy->id,
-                    'created_at' => $user->created_at?->toIso8601String(),
-                    'updated_at' => $user->updated_at?->toIso8601String(),
+                    'created_at' => $user->created_at,
+                    'updated_at' => $user->updated_at,
                 ];
             }));
         }
-
-        tenancy()->end();
 
         if ($tenantFilter = $request->input('tenant_id')) {
             $rows = $rows->where('tenant_id', $tenantFilter)->values();
         }
 
-        $rows = $rows->sortByDesc('created_at')->values();
-
+        $rows    = $rows->sortByDesc('created_at')->values();
         $perPage = min((int) $request->input('per_page', 15), 100);
         $page    = max((int) $request->input('page', 1), 1);
         $total   = $rows->count();
