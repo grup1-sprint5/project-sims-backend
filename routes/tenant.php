@@ -45,6 +45,15 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
         Route::post('/auth/exchange-token', [AuthExchangeController::class, 'exchange'])->name('tenant.exchange');
         Route::post('/users', [UserController::class, 'store']); // Public registration
 
+        // Public: returns basic tenant info (name, id) for the login page branding.
+        Route::get('/tenant/info', function () {
+            if (!function_exists('tenancy') || !tenancy()->initialized) {
+                return response()->json(['id' => null, 'name' => null]);
+            }
+            $t = tenant();
+            return response()->json(['id' => $t->id, 'name' => $t->name]);
+        });
+
         Route::middleware('auth.tenant-token')->group(function () {
 
             Route::post('/logout', [AuthController::class, 'logout']);
