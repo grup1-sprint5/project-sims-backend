@@ -24,6 +24,8 @@ use App\Http\Controllers\Api\GeofenceEventController;
 use App\Http\Controllers\Api\VehiclePositionController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\TenantDomainController;
+use App\Http\Controllers\Api\SensorDataController;
+use App\Http\Controllers\Api\ActuatorController;
 
 /*
 |--------------------------------------------------------------------------
@@ -112,6 +114,13 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
             Route::get('wallet/balance', [WalletController::class, 'balance']);
             Route::post('wallet/checkout-session', [WalletController::class, 'createStripeCheckoutSession']);
             Route::post('wallet/confirm-session', [WalletController::class, 'confirmStripeCheckoutSession']);
+
+            // IoT Sensors & Actuator
+            Route::get('sensor-data/devices', [SensorDataController::class, 'devices']);
+            Route::get('sensor-data/devices/{deviceId}/latest', [SensorDataController::class, 'latestByDevice']);
+            Route::get('sensor-data', [SensorDataController::class, 'index']);
+            Route::get('actuator/status', [ActuatorController::class, 'status']);
+            Route::post('actuator', [ActuatorController::class, 'setState']);
 
             // Reservations – admin operations
             Route::prefix('admin')->name('admin.')->group(function () {
