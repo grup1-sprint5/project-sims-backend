@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Stancl\Tenancy\Database\Models\Tenant;
+use App\Models\Tenant;
 
 class AdminSystemController extends Controller
 {
