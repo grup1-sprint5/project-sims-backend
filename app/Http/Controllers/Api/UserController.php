@@ -28,16 +28,16 @@ class UserController extends Controller
 
         $authUser = auth()->user();
 
-        // Determine tenant context: from active tenancy or from the user's own tenant_id.
+        // Determine tenant context. A central SuperAdmin may still have a legacy
+        // tenant_id value, but central requests must remain cross-tenant.
         $tenantId = null;
         if (function_exists('tenancy') && tenancy()->initialized) {
             $tenantId = (string) tenant('id');
-        } elseif (!empty($authUser->tenant_id)) {
+        } elseif ($authUser && !$authUser->isSuperAdmin() && !empty($authUser->tenant_id)) {
             $tenantId = (string) $authUser->tenant_id;
         }
 
-        // Only call indexForSuperAdmin for truly central SuperAdmin:
-        // must have SuperAdmin role AND no tenant context (neither tenancy nor tenant_id).
+        // Central SuperAdmin sees users across all tenants.
         if (!$tenantId && $authUser && $authUser->isSuperAdmin()) {
             return $this->indexForSuperAdmin($request);
         }
