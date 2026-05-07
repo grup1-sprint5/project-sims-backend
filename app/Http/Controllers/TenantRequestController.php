@@ -151,7 +151,7 @@ class TenantRequestController extends Controller
         }
 
         $existsTenant = \App\Models\Tenant::find($slug) !== null;
-        $existsRequest = TenantRequest::where('slug', $slug)->exists();
+        $existsRequest = TenantRequest::whereIn('status', ['pending', 'approved'])->where('slug', $slug)->exists();
 
         if ($existsTenant) {
             return response()->json(['available' => false, 'message' => 'Slug already used by an existing tenant']);
