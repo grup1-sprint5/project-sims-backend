@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Geofence;
 
 use App\Rules\ValidPolygonCoordinates;
+use App\Support\Geofencing\PolygonNormalizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -11,6 +12,18 @@ class UpdateGeofenceRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (! $this->has('polygon')) {
+            return;
+        }
+
+        $polygon = PolygonNormalizer::normalize($this->input('polygon'));
+        if ($polygon !== null) {
+            $this->merge(['polygon' => $polygon]);
+        }
     }
 
     public function rules(): array
@@ -28,7 +41,7 @@ class UpdateGeofenceRequest extends FormRequest
             'schedule.start' => ['nullable', 'date_format:H:i'],
             'schedule.end' => ['nullable', 'date_format:H:i'],
 
-            'polygon' => ['sometimes', 'array', new ValidPolygonCoordinates()],
+            'polygon' => ['sometimes', 'array', new ValidPolygonCoordinates],
             'center' => ['sometimes', 'array'],
             'center.lat' => ['required_with:center', 'numeric', 'between:-90,90'],
             'center.lng' => ['required_with:center', 'numeric', 'between:-180,180'],

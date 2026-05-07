@@ -17,9 +17,13 @@ class GeofenceApiTest extends TestCase
     use RefreshDatabase;
 
     private Tenant $tenant1;
+
     private Tenant $tenant2;
+
     private User $tenantAdmin1;
+
     private User $tenantAdmin2;
+
     private Vehicle $vehicle1;
 
     protected function setUp(): void
@@ -117,7 +121,7 @@ class GeofenceApiTest extends TestCase
         $circleResponse->assertCreated();
         $this->assertEquals('circle', $circleResponse->json('data.type'));
 
-        $updateResponse = $this->patchJson('/api/geofences/' . $polygonId, [
+        $updateResponse = $this->patchJson('/api/geofences/'.$polygonId, [
             'name' => 'Zona Port Nord',
             'active' => false,
         ]);
@@ -125,6 +129,53 @@ class GeofenceApiTest extends TestCase
         $updateResponse->assertOk()
             ->assertJsonPath('data.name', 'Zona Port Nord')
             ->assertJsonPath('data.active', false);
+    }
+
+    public function test_tenant_admin_can_create_open_polygon_from_map_coordinates(): void
+    {
+        $this->actingAs($this->tenantAdmin1);
+
+        $response = $this->postJson('/api/geofences', [
+            'name' => 'Zona Dibujada',
+            'type' => 'polygon',
+            'polygon' => [
+                ['lat' => 41.3800, 'lng' => 2.1700],
+                ['lat' => 41.3800, 'lng' => 2.1800],
+                ['lat' => 41.3900, 'lng' => 2.1800],
+                ['lat' => 41.3900, 'lng' => 2.1700],
+            ],
+            'rule_type' => 'allow',
+            'active' => true,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.geometry_geojson.type', 'Polygon')
+            ->assertJsonPath('data.geometry_geojson.coordinates.0.0', [2.17, 41.38])
+            ->assertJsonPath('data.geometry_geojson.coordinates.0.4', [2.17, 41.38]);
+    }
+
+    public function test_tenant_admin_can_create_polygon_from_geojson(): void
+    {
+        $this->actingAs($this->tenantAdmin1);
+
+        $response = $this->postJson('/api/geofences', [
+            'name' => 'Zona GeoJSON',
+            'type' => 'polygon',
+            'polygon' => [
+                'type' => 'Polygon',
+                'coordinates' => [[
+                    [2.1700, 41.3800],
+                    [2.1800, 41.3800],
+                    [2.1800, 41.3900],
+                    [2.1700, 41.3900],
+                ]],
+            ],
+            'rule_type' => 'forbid',
+            'active' => true,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.geometry_geojson.coordinates.0.4', [2.17, 41.38]);
     }
 
     public function test_assignments_and_event_flow_work_and_no_duplicates_are_emitted(): void
@@ -160,7 +211,7 @@ class GeofenceApiTest extends TestCase
             'lng' => 2.1790,
             'timestamp' => now()->toISOString(),
         ])->assertStatus(202)
-          ->assertJsonPath('data.events_count', 0);
+            ->assertJsonPath('data.events_count', 0);
 
         // Outside -> inside => enter + violation
         $this->postJson('/api/vehicle-positions', [
@@ -169,7 +220,7 @@ class GeofenceApiTest extends TestCase
             'lng' => 2.1734,
             'timestamp' => now()->addSeconds(5)->toISOString(),
         ])->assertStatus(202)
-          ->assertJsonPath('data.events_count', 2);
+            ->assertJsonPath('data.events_count', 2);
 
         // Still inside => no duplicates
         $this->postJson('/api/vehicle-positions', [
@@ -178,9 +229,9 @@ class GeofenceApiTest extends TestCase
             'lng' => 2.1735,
             'timestamp' => now()->addSeconds(10)->toISOString(),
         ])->assertStatus(202)
-          ->assertJsonPath('data.events_count', 0);
+            ->assertJsonPath('data.events_count', 0);
 
-        $eventsResponse = $this->getJson('/api/geofence-events?vehicle_id=' . $this->vehicle1->id);
+        $eventsResponse = $this->getJson('/api/geofence-events?vehicle_id='.$this->vehicle1->id);
         $eventsResponse->assertOk();
         $types = collect($eventsResponse->json('data'))->pluck('event_type')->all();
 
@@ -203,7 +254,7 @@ class GeofenceApiTest extends TestCase
         $geofenceId = $created->json('data.id');
 
         $this->actingAs($this->tenantAdmin2)
-            ->getJson('/api/geofences/' . $geofenceId)
+            ->getJson('/api/geofences/'.$geofenceId)
             ->assertNotFound();
     }
 }
