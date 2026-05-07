@@ -22,8 +22,11 @@ class TenantRequestController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        // Ensure slug/email not already used by a Tenant or an existing request
-        $existingRequest = TenantRequest::where('slug', $validated['slug'])->orWhere('email', $validated['email'])->first();
+        // Ensure slug/email not already used by a Tenant or an active (non-rejected) request
+        $existingRequest = TenantRequest::whereIn('status', ['pending', 'approved'])
+            ->where(function ($q) use ($validated) {
+                $q->where('slug', $validated['slug'])->orWhere('email', $validated['email']);
+            })->first();
         if ($existingRequest) {
             return response()->json(['message' => 'A request with that slug or email already exists.'], 409);
         }
@@ -115,7 +118,7 @@ class TenantRequestController extends Controller
     }
 
     // Admin: reject request
-    public function reject(Request $request, $id)
+    public function reject($id)
     {
         $user = auth()->user();
         if (!$user || !method_exists($user, 'isSuperAdmin') || !$user->isSuperAdmin()) {
