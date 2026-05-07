@@ -4,6 +4,7 @@ namespace App\Services\Geofencing;
 
 use App\Models\Geofence;
 use App\Models\User;
+use App\Support\Geofencing\PolygonNormalizer;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -38,7 +39,7 @@ class GeofenceService
     private function toPersistedAttributes(array $payload, ?Geofence $current = null): array
     {
         $type = (string) ($payload['type'] ?? $current?->type);
-        if (!in_array($type, ['polygon', 'circle'], true)) {
+        if (! in_array($type, ['polygon', 'circle'], true)) {
             throw ValidationException::withMessages([
                 'type' => ['type must be polygon or circle.'],
             ]);
@@ -49,7 +50,8 @@ class GeofenceService
 
         if ($type === 'polygon') {
             $polygon = $payload['polygon'] ?? Arr::get($current?->geometry_geojson, 'coordinates.0');
-            if (!is_array($polygon) || count($polygon) < 4) {
+            $polygon = PolygonNormalizer::normalize($polygon);
+            if ($polygon === null) {
                 throw ValidationException::withMessages([
                     'polygon' => ['polygon is required for polygon geofences.'],
                 ]);
@@ -73,7 +75,7 @@ class GeofenceService
             ];
 
             $radiusM = $payload['radius_m'] ?? $current?->radius_m;
-            if (!is_array($center) || !isset($center['lat'], $center['lng']) || !$radiusM) {
+            if (! is_array($center) || ! isset($center['lat'], $center['lng']) || ! $radiusM) {
                 throw ValidationException::withMessages([
                     'center' => ['center and radius_m are required for circle geofences.'],
                 ]);
@@ -90,7 +92,7 @@ class GeofenceService
 
     private function assertPostgisPolygonIsValid(array $polygonRing): void
     {
-        if (!$this->canUsePostgis()) {
+        if (! $this->canUsePostgis()) {
             return;
         }
 
@@ -103,7 +105,7 @@ class GeofenceService
             );
 
             $isValid = (bool) ((int) ($result->is_valid ?? 0));
-            if (!$isValid) {
+            if (! $isValid) {
                 throw ValidationException::withMessages([
                     'polygon' => ['Polygon is not valid according to PostGIS ST_IsValid.'],
                 ]);
@@ -117,7 +119,7 @@ class GeofenceService
 
     private function syncPostgisGeometry(Geofence $geofence): void
     {
-        if (!$this->canUsePostgis()) {
+        if (! $this->canUsePostgis()) {
             return;
         }
 
@@ -132,7 +134,7 @@ class GeofenceService
         }
 
         $polygonRing = Arr::get($geofence->geometry_geojson, 'coordinates.0', []);
-        if (!is_array($polygonRing) || $polygonRing === []) {
+        if (! is_array($polygonRing) || $polygonRing === []) {
             return;
         }
 
@@ -148,11 +150,11 @@ class GeofenceService
     private function polygonRingToWkt(array $ring): string
     {
         $pairs = array_map(
-            fn (array $coord) => (float) $coord[0] . ' ' . (float) $coord[1],
+            fn (array $coord) => (float) $coord[0].' '.(float) $coord[1],
             $ring
         );
 
-        return 'POLYGON((' . implode(', ', $pairs) . '))';
+        return 'POLYGON(('.implode(', ', $pairs).'))';
     }
 
     private function canUsePostgis(): bool
@@ -163,6 +165,7 @@ class GeofenceService
 
         if (DB::getDriverName() !== 'pgsql') {
             $this->postgisEnabled = false;
+
             return false;
         }
 
