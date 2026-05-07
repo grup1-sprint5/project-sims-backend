@@ -238,9 +238,14 @@ class UserController extends Controller
     /**
      * Show a specific user.
      */
-    public function show(User $user)
+    public function show(Request $request, $user)
     {
-        $this->authorize('view', $user);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $user = $this->resolveUserForRequest($request, $user);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('view', $user);
+        }
 
         return new UserResource($user->load(['roles', 'tenant']));
     }
@@ -306,9 +311,14 @@ class UserController extends Controller
     /**
      * Update a user.
      */
-    public function update(UpdateUserRequest $request, User $user)
+    public function update(UpdateUserRequest $request, $user)
     {
-        $this->authorize('update', $user);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $user = $this->resolveUserForRequest($request, $user);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('update', $user);
+        }
 
         $data = $request->validated();
 
@@ -336,9 +346,14 @@ class UserController extends Controller
     /**
      * Delete a user.
      */
-    public function destroy(User $user)
+    public function destroy(Request $request, $user)
     {
-        $this->authorize('delete', $user);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $user = $this->resolveUserForRequest($request, $user);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('delete', $user);
+        }
 
         $user->delete();
 
@@ -357,5 +372,26 @@ class UserController extends Controller
         $user->restore();
 
         return new UserResource($user->load('roles', 'tenant'));
+    }
+
+    private function resolveUserForRequest(Request $request, int|string $id): User
+    {
+        $tenantId = $request->query('tenant_id');
+
+        if ($this->isCrossTenantSuperAdminRequest($request)) {
+            $tenant = Tenant::findOrFail($tenantId);
+            tenancy()->initialize($tenant);
+
+            return User::findOrFail($id);
+        }
+
+        return User::findOrFail($id);
+    }
+
+    private function isCrossTenantSuperAdminRequest(Request $request): bool
+    {
+        $authUser = auth()->user();
+
+        return $request->filled('tenant_id') && $authUser && $authUser->isSuperAdmin();
     }
 }

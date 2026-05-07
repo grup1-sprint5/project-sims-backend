@@ -3,17 +3,13 @@
 namespace App\Services;
 
 use App\Models\Tenant;
-use App\Models\User;
 use Database\Seeders\PermissionsSeeder;
 use Database\Seeders\RolesSeeder;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\PermissionRegistrar;
 
 class TenantProvisioningService
 {
-    public const DEFAULT_PASSWORD = 'password';
-
     /**
      * Complete the operational setup every tenant needs after creation.
      */
@@ -21,12 +17,12 @@ class TenantProvisioningService
     {
         $domains = $this->ensureDomains($tenant);
         $this->runMigrations($tenant);
-        $users = $this->seedTenantDatabase($tenant);
+        $this->seedTenantDatabase($tenant);
 
         return [
             'domains' => $domains,
-            'credentials' => $users,
-            'password' => self::DEFAULT_PASSWORD,
+            'credentials' => [],
+            'password' => null,
         ];
     }
 
@@ -58,7 +54,7 @@ class TenantProvisioningService
         ]);
     }
 
-    public function seedTenantDatabase(Tenant $tenant): array
+    public function seedTenantDatabase(Tenant $tenant): void
     {
         tenancy()->initialize($tenant);
 
@@ -68,41 +64,10 @@ class TenantProvisioningService
             (new PermissionsSeeder())->run();
             (new RolesSeeder())->run();
 
-            $users = [
-                'admin' => $this->ensureUser($tenant, 'admin', 'TenantAdmin', 'Admin'),
-                'client' => $this->ensureUser($tenant, 'client', 'Client', 'Client'),
-                'worker' => $this->ensureUser($tenant, 'worker', 'TenantWorker', 'Worker'),
-            ];
-
             app(PermissionRegistrar::class)->forgetCachedPermissions();
-
-            return $users;
         } finally {
             tenancy()->end();
         }
-    }
-
-    private function ensureUser(Tenant $tenant, string $prefix, string $role, string $label): array
-    {
-        $email = "{$prefix}@{$tenant->id}.com";
-
-        $user = User::updateOrCreate(
-            ['email' => $email],
-            [
-                'tenant_id' => (string) $tenant->id,
-                'name' => "{$label} {$tenant->name}",
-                'username' => $prefix,
-                'password' => Hash::make(self::DEFAULT_PASSWORD),
-                'active' => true,
-            ],
-        );
-
-        $user->syncRoles([$role]);
-
-        return [
-            'email' => $email,
-            'role' => $role,
-        ];
     }
 
     /**
