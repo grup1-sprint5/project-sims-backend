@@ -8,6 +8,7 @@ use App\Http\Requests\Vehicle\UpdateVehicleRequest;
 use App\Services\VehicleLocationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\Tenant;
 
 class VehicleController extends Controller
 {
@@ -139,9 +140,14 @@ class VehicleController extends Controller
     /**
      * Mostrar un vehículo específico
      */
-    public function show(Vehicle $vehicle): JsonResponse
+    public function show(Request $request, $vehicle): JsonResponse
     {
-        $this->authorize('view', $vehicle);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $vehicle = $this->resolveVehicleForRequest($request, $vehicle);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('view', $vehicle);
+        }
 
         return response()->json([
             'data' => $vehicle,
@@ -151,9 +157,14 @@ class VehicleController extends Controller
     /**
      * Actualizar un vehículo
      */
-    public function update(UpdateVehicleRequest $request, Vehicle $vehicle): JsonResponse
+    public function update(UpdateVehicleRequest $request, $vehicle): JsonResponse
     {
-        $this->authorize('update', $vehicle);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $vehicle = $this->resolveVehicleForRequest($request, $vehicle);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('update', $vehicle);
+        }
 
         $data = $request->validated();
 
@@ -188,9 +199,14 @@ class VehicleController extends Controller
     /**
      * Eliminar un vehículo (soft delete)
      */
-    public function destroy(Vehicle $vehicle): JsonResponse
+    public function destroy(Request $request, $vehicle): JsonResponse
     {
-        $this->authorize('delete', $vehicle);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $vehicle = $this->resolveVehicleForRequest($request, $vehicle);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('delete', $vehicle);
+        }
 
         $this->locationService->deleteLocationByPlate($vehicle->license_plate);
 
@@ -277,5 +293,26 @@ class VehicleController extends Controller
         })->values();
 
         return response()->json($result);
+    }
+
+    private function resolveVehicleForRequest(Request $request, int|string|Vehicle $id): Vehicle
+    {
+        if ($id instanceof Vehicle) {
+            return $id;
+        }
+
+        if ($this->isCrossTenantSuperAdminRequest($request)) {
+            $tenant = Tenant::findOrFail((string) $request->query('tenant_id'));
+            tenancy()->initialize($tenant);
+        }
+
+        return Vehicle::findOrFail($id);
+    }
+
+    private function isCrossTenantSuperAdminRequest(Request $request): bool
+    {
+        $user = $request->user();
+
+        return $request->filled('tenant_id') && $user && $user->isSuperAdmin();
     }
 }

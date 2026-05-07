@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Models\Tenant;
 
 class AdminReservationController extends Controller
 {
@@ -75,6 +76,10 @@ class AdminReservationController extends Controller
     {
         $this->authorize('viewAny', Reservation::class);
 
+        if ($this->isCentralSuperAdminRequest($request)) {
+            return app(\App\Http\Controllers\Api\AdminSystemController::class)->reservations($request);
+        }
+
         if (!Schema::hasTable('reservations')) {
             $perPage = (int) $request->integer('per_page', 20);
 
@@ -110,10 +115,12 @@ class AdminReservationController extends Controller
      */
     public function show(string $id)
     {
-        $reservation = Reservation::findOrFail($id);
+        $reservation = $this->resolveReservationForRequest(request(), $id);
         
         // Authorize viewing this reservation
-        $this->authorize('view', $reservation);
+        if (!$this->isCrossTenantSuperAdminRequest(request())) {
+            $this->authorize('view', $reservation);
+        }
 
         return response()->json($reservation->load(['user', 'vehicle', 'trip']));
     }
@@ -124,10 +131,13 @@ class AdminReservationController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $reservation = Reservation::findOrFail($id);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $reservation = $this->resolveReservationForRequest($request, $id);
         
         // Authorize the update
-        $this->authorize('update', $reservation);
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('update', $reservation);
+        }
 
         // Validate input
         $validated = $request->validate([
@@ -151,10 +161,12 @@ class AdminReservationController extends Controller
      */
     public function destroy(string $id)
     {
-        $reservation = Reservation::findOrFail($id);
+        $reservation = $this->resolveReservationForRequest(request(), $id);
         
         // Authorize deletion
-        $this->authorize('delete', $reservation);
+        if (!$this->isCrossTenantSuperAdminRequest(request())) {
+            $this->authorize('delete', $reservation);
+        }
 
         // Prevent deletion of active reservations
         if ($reservation->status === 'active') {
@@ -175,10 +187,13 @@ class AdminReservationController extends Controller
      */
     public function forceFinish(Request $request, string $id)
     {
-        $reservation = Reservation::findOrFail($id);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $reservation = $this->resolveReservationForRequest($request, $id);
         
         // Authorize force finish (requires delete permission)
-        $this->authorize('forceFinish', $reservation);
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('forceFinish', $reservation);
+        }
 
         if ($reservation->status !== 'active') {
             return response()->json([
@@ -232,5 +247,30 @@ class AdminReservationController extends Controller
                 'note' => $noteText
             ]
         ]);
+    }
+
+    private function resolveReservationForRequest(Request $request, int|string $id): Reservation
+    {
+        if ($this->isCrossTenantSuperAdminRequest($request)) {
+            $tenant = Tenant::findOrFail((string) $request->query('tenant_id'));
+            tenancy()->initialize($tenant);
+        }
+
+        return Reservation::findOrFail($id);
+    }
+
+    private function isCrossTenantSuperAdminRequest(Request $request): bool
+    {
+        $user = $request->user();
+
+        return $request->filled('tenant_id') && $user && $user->isSuperAdmin();
+    }
+
+    private function isCentralSuperAdminRequest(Request $request): bool
+    {
+        $user = $request->user();
+
+        return $user && $user->isSuperAdmin()
+            && (!function_exists('tenancy') || !tenancy()->initialized);
     }
 }
