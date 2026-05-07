@@ -171,6 +171,15 @@ class UserController extends Controller
 
         // When a tenant_id is provided (superadmin creating a user for a specific tenant),
         // switch to that tenant's database so the user lands in the right schema.
+        // Resolve role name BEFORE switching tenancy: IDs may differ across schemas.
+        $roleName = null;
+        if ($roleId) {
+            $roleName = Role::find($roleId)?->name;
+        }
+
+        $authUser = auth()->user();
+        $isSuperAdmin = $authUser && $authUser->isSuperAdmin();
+
         if ($tenantId) {
             $tenant = \App\Models\Tenant::find($tenantId);
             if (!$tenant) {
@@ -183,16 +192,16 @@ class UserController extends Controller
 
         $user = User::create($data);
 
-        if ($roleId) {
-            $role = Role::find($roleId);
+        if ($roleName) {
+            // Find role by NAME in the current (possibly tenant) context to avoid ID mismatches.
+            $role = Role::where('name', $roleName)->first();
             if ($role) {
-                $authUser = auth()->user();
-                $isSuperAdmin = $authUser && $authUser->isSuperAdmin();
                 if (strtolower($role->name) === 'superadmin' && !$isSuperAdmin) {
                     $user->delete();
                     return response()->json(['message' => 'Only SuperAdmin can assign the SuperAdmin role.'], 403);
                 }
-                $user->assignRole($role);
+                // syncRoles replaces the default "Client" role assigned in User::booted.
+                $user->syncRoles([$role]);
             }
         }
 

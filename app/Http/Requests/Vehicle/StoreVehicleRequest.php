@@ -14,12 +14,17 @@ class StoreVehicleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'license_plate' => ['required', 'string', 'max:20', 'unique:vehicles,license_plate'],
-            'brand' => ['required', 'string', 'max:100'],
-            'model' => ['required', 'string', 'max:100'],
-            'active' => ['sometimes', 'boolean'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitude'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude'],
+            'license_plate'   => ['required', 'string', 'max:20', 'unique:vehicles,license_plate'],
+            'brand'           => ['required', 'string', 'max:100'],
+            'model'           => ['required', 'string', 'max:100'],
+            'active'          => ['sometimes', 'boolean'],
+            'price_per_minute'=> ['nullable', 'numeric', 'min:0'],
+            'type'            => ['nullable', 'string', 'max:50'],
+            'status'          => ['nullable', 'string', 'max:50'],
+            'image_url'       => ['nullable', 'string', 'max:500'],
+            'battery_level'   => ['nullable', 'integer', 'between:0,100'],
+            'latitude'        => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitude'],
+            'longitude'       => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude'],
         ];
     }
 

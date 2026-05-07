@@ -107,9 +107,15 @@ class VehicleController extends Controller
         $longitude = array_key_exists('longitude', $data) ? $data['longitude'] : null;
 
         unset($data['latitude'], $data['longitude']);
-        
-        // Assign tenant_id from authenticated user
-        $data['tenant_id'] = $request->user()->tenant_id;
+
+        // Prefer the active tenancy context; fall back to the user's tenant_id.
+        if (function_exists('tenancy') && tenancy()->initialized) {
+            $data['tenant_id'] = tenant('id');
+        } elseif ($request->user()->tenant_id) {
+            $data['tenant_id'] = $request->user()->tenant_id;
+        } else {
+            return response()->json(['message' => 'No tenant context. Send X-Tenant header.'], 400);
+        }
 
         $vehicle = Vehicle::create($data);
 
