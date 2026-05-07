@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Geofence\StoreGeofenceRequest;
 use App\Http\Requests\Geofence\UpdateGeofenceRequest;
 use App\Models\Geofence;
+use App\Models\Tenant;
 use App\Services\Geofencing\GeofenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -71,9 +72,14 @@ class GeofenceController extends Controller
         ], 201);
     }
 
-    public function show(Request $request, Geofence $geofence): JsonResponse
+    public function show(Request $request, $geofence): JsonResponse
     {
-        $this->authorize('view', $geofence);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $geofence = $this->resolveGeofenceForRequest($request, $geofence);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('view', $geofence);
+        }
 
         if (!$request->user()->isSuperAdmin() && $geofence->tenant_id !== (string) $request->user()->tenant_id) {
             abort(404);
@@ -84,9 +90,14 @@ class GeofenceController extends Controller
         ]);
     }
 
-    public function update(UpdateGeofenceRequest $request, Geofence $geofence): JsonResponse
+    public function update(UpdateGeofenceRequest $request, $geofence): JsonResponse
     {
-        $this->authorize('update', $geofence);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $geofence = $this->resolveGeofenceForRequest($request, $geofence);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('update', $geofence);
+        }
 
         if (!$request->user()->isSuperAdmin() && $geofence->tenant_id !== (string) $request->user()->tenant_id) {
             abort(404);
@@ -100,9 +111,14 @@ class GeofenceController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Geofence $geofence): JsonResponse
+    public function destroy(Request $request, $geofence): JsonResponse
     {
-        $this->authorize('delete', $geofence);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $geofence = $this->resolveGeofenceForRequest($request, $geofence);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('delete', $geofence);
+        }
 
         if (!$request->user()->isSuperAdmin() && $geofence->tenant_id !== (string) $request->user()->tenant_id) {
             abort(404);
@@ -113,5 +129,26 @@ class GeofenceController extends Controller
         return response()->json([
             'message' => 'Geofence deleted successfully.',
         ]);
+    }
+
+    private function resolveGeofenceForRequest(Request $request, string|Geofence $id): Geofence
+    {
+        if ($id instanceof Geofence) {
+            return $id;
+        }
+
+        if ($this->isCrossTenantSuperAdminRequest($request)) {
+            $tenant = Tenant::findOrFail((string) $request->query('tenant_id'));
+            tenancy()->initialize($tenant);
+        }
+
+        return Geofence::findOrFail($id);
+    }
+
+    private function isCrossTenantSuperAdminRequest(Request $request): bool
+    {
+        $user = $request->user();
+
+        return $request->filled('tenant_id') && $user && $user->isSuperAdmin();
     }
 }

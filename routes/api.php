@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\CentralAuthController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Middleware\CheckTenantActive;
+use App\Http\Middleware\InitializeTenancyByDomainOrHeader;
 
 /*
 |--------------------------------------------------------------------------
@@ -32,26 +34,11 @@ Route::get('/tenant-slugs/check', [TenantRequestController::class, 'checkSlug'])
 
 // Central user endpoint (accepts both central superadmin and tenant users with valid tokens)
 use App\Http\Controllers\Api\AuthController;
-Route::middleware(['auth:sanctum'])->get('/user', [AuthController::class, 'user']);
-
-// Central admin data endpoints (for superadmin dashboard - NO tenancy middleware)
-use App\Http\Controllers\Api\CentralAdminController;
-use App\Http\Controllers\Api\AdminSystemController;
-Route::middleware(['auth:sanctum'])->group(function () {
-    Route::get('/users', [CentralAdminController::class, 'users']);
-    Route::get('/roles', [CentralAdminController::class, 'roles']);
-    Route::get('/permissions', [CentralAdminController::class, 'permissions']);
-    
-    // System-wide admin routes (all data from all tenants)
-    Route::get('/vehicles', [AdminSystemController::class, 'vehicles']);
-    Route::get('/reservations', [AdminSystemController::class, 'reservations']);
-    Route::get('/admin/reservations', [AdminSystemController::class, 'reservations']); // alias for superadmin dashboard
-    Route::get('/bookings', [AdminSystemController::class, 'reservations']); // alias for reservations
-    Route::get('/geofences', [AdminSystemController::class, 'geofences']);
-    Route::get('/geofence-events', [AdminSystemController::class, 'geofenceEvents']);
-    Route::get('/tenants', [AdminSystemController::class, 'tenants']);
-    Route::get('/tickets', [AdminSystemController::class, 'tickets']);
-});
+Route::middleware([
+    InitializeTenancyByDomainOrHeader::class,
+    CheckTenantActive::class,
+    'auth.tenant-token',
+])->get('/user', [AuthController::class, 'user']);
 
 // Admin endpoints for tenant requests (require auth + superadmin)
 Route::middleware(['auth:sanctum'])->group(function () {

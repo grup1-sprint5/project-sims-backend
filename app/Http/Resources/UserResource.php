@@ -22,6 +22,7 @@ class UserResource extends JsonResource
             'active' => (bool) $this->active,
             'roles' => $this->whenLoaded('roles'),
             'tenant' => $this->whenLoaded('tenant'),
+            'tenant_id' => $this->tenant_id,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

@@ -2,174 +2,77 @@
 
 namespace App\Http\Controllers\Api;
 
-use Stancl\Tenancy\Database\Models\Tenant;
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Schema;
+use App\Models\Tenant;
 
 class AdminSystemController extends Controller
 {
-    /**
-     * Get all vehicles from all tenants
-     */
     public function vehicles(Request $request)
     {
-        // Get active tenants via tenancy model so we can initialize correctly
-        $tenants = Tenant::where('active', true)->get();
+        return $this->paginatedTenantRows($request, 'vehicles', function ($query) use ($request) {
+            $query->when(Schema::hasColumn('vehicles', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'));
 
-        $allVehicles = collect();
-
-        foreach ($tenants as $tenant) {
-            try {
-                tenancy()->initialize($tenant);
-
-                $vehicles = DB::table('vehicles')
-                    ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
-                    ->get();
-
-                $allVehicles = $allVehicles->concat($vehicles);
-            } catch (\Throwable $e) {
-                // Skip tenant if initialization or query fails
-            } finally {
-                try { tenancy()->end(); } catch (\Throwable $_) {}
+            if ($search = trim((string) $request->input('search', ''))) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('license_plate', 'ilike', "%{$search}%")
+                        ->orWhere('brand', 'ilike', "%{$search}%")
+                        ->orWhere('model', 'ilike', "%{$search}%");
+                });
             }
-        }
 
-        $perPage = (int) $request->input('per_page', 15);
-        $page = (int) $request->input('page', 1);
-
-        $paginated = $allVehicles->slice(($page - 1) * $perPage, $perPage);
-
-        return response()->json([
-            'data' => $paginated->values(),
-            'current_page' => $page,
-            'total' => $allVehicles->count(),
-            'per_page' => $perPage,
-            'last_page' => ceil($allVehicles->count() / $perPage),
-        ]);
+            if ($request->has('active')) {
+                $query->where('active', filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN));
+            }
+        }, 'created_at');
     }
 
-    /**
-     * Get all reservations from all tenants
-     */
     public function reservations(Request $request)
     {
-        // Use Tenant model to initialize tenancy correctly per tenant
-        $tenants = Tenant::where('active', true)->get();
+        return $this->paginatedTenantRows($request, 'reservations', function ($query) use ($request) {
+            $query->when(Schema::hasColumn('reservations', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'));
 
-        $allReservations = collect();
-
-        foreach ($tenants as $tenant) {
-            try {
-                tenancy()->initialize($tenant);
-
-                $reservations = DB::table('reservations')
-                    ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
-                    ->get();
-
-                $allReservations = $allReservations->concat($reservations);
-            } catch (\Throwable $e) {
-                // skip failing tenant
-            } finally {
-                try { tenancy()->end(); } catch (\Throwable $_) {}
+            if ($request->filled('status')) {
+                $query->where('status', $request->input('status'));
             }
-        }
-
-        $perPage = (int) $request->input('per_page', 15);
-        $page = (int) $request->input('page', 1);
-
-        $paginated = $allReservations->slice(($page - 1) * $perPage, $perPage);
-
-        return response()->json([
-            'data' => $paginated->values(),
-            'current_page' => $page,
-            'total' => $allReservations->count(),
-            'per_page' => $perPage,
-            'last_page' => ceil($allReservations->count() / $perPage),
-        ]);
+        }, 'created_at');
     }
 
-    /**
-     * Get all geofences from all tenants
-     */
     public function geofences(Request $request)
     {
-        $tenants = Tenant::where('active', true)->get();
+        return $this->paginatedTenantRows($request, 'geofences', function ($query) use ($request) {
+            $query->when(Schema::hasColumn('geofences', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'));
 
-        $allGeofences = collect();
-
-        foreach ($tenants as $tenant) {
-            try {
-                tenancy()->initialize($tenant);
-
-                $geofences = DB::table('geofences')
-                    ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
-                    ->get();
-
-                $allGeofences = $allGeofences->concat($geofences);
-            } catch (\Throwable $e) {
-                // skip failing tenant
-            } finally {
-                try { tenancy()->end(); } catch (\Throwable $_) {}
+            if ($name = trim((string) $request->input('name', ''))) {
+                $query->where('name', 'ilike', "%{$name}%");
             }
-        }
 
-        $perPage = (int) $request->input('per_page', 15);
-        $page = (int) $request->input('page', 1);
-
-        $paginated = $allGeofences->slice(($page - 1) * $perPage, $perPage);
-
-        return response()->json([
-            'data' => $paginated->values(),
-            'current_page' => $page,
-            'total' => $allGeofences->count(),
-            'per_page' => $perPage,
-            'last_page' => ceil($allGeofences->count() / $perPage),
-        ]);
+            if ($request->has('active')) {
+                $query->where('active', filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN));
+            }
+        }, 'updated_at');
     }
 
-    /**
-     * Get all geofence events from all tenants
-     */
     public function geofenceEvents(Request $request)
     {
-        $tenants = Tenant::where('active', true)->get();
-
-        $allEvents = collect();
-
-        foreach ($tenants as $tenant) {
-            try {
-                tenancy()->initialize($tenant);
-
-                $events = DB::table('geofence_events')
-                    ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
-                    ->get();
-
-                $allEvents = $allEvents->concat($events);
-            } catch (\Throwable $e) {
-                // skip failing tenant
-            } finally {
-                try { tenancy()->end(); } catch (\Throwable $_) {}
+        return $this->paginatedTenantRows($request, 'geofence_events', function ($query) use ($request) {
+            foreach (['event_type', 'geofence_id', 'vehicle_id'] as $field) {
+                if ($request->filled($field)) {
+                    $query->where($field, $request->input($field));
+                }
             }
-        }
 
-        $perPage = (int) $request->input('per_page', 15);
-        $page = (int) $request->input('page', 1);
-
-        $paginated = $allEvents->slice(($page - 1) * $perPage, $perPage);
-
-        return response()->json([
-            'data' => $paginated->values(),
-            'current_page' => $page,
-            'total' => $allEvents->count(),
-            'per_page' => $perPage,
-            'last_page' => ceil($allEvents->count() / $perPage),
-        ]);
+            if ($request->filled('from')) {
+                $query->where('occurred_at', '>=', $request->input('from'));
+            }
+            if ($request->filled('to')) {
+                $query->where('occurred_at', '<=', $request->input('to'));
+            }
+        }, 'occurred_at');
     }
 
-    /**
-     * Get all tenants
-     */
     public function tenants(Request $request)
     {
         $centralConnection = (string) (config('tenancy.database.central_connection')
@@ -185,47 +88,78 @@ class AdminSystemController extends Controller
         }
 
         $perPage = (int) $request->input('per_page', 15);
-        $tenants = $query->paginate(min($perPage, 100));
 
-        return response()->json($tenants);
+        return response()->json($query->paginate(min($perPage, 100)));
     }
 
-    /**
-     * Get all tickets from all tenants
-     */
     public function tickets(Request $request)
     {
-        $tenants = Tenant::where('active', true)->get();
+        return $this->paginatedTenantRows($request, 'tickets', function ($query) use ($request) {
+            $query->when(Schema::hasColumn('tickets', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'));
 
-        $allTickets = collect();
+            if ($search = trim((string) $request->input('search', ''))) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('title', 'ilike', "%{$search}%")
+                        ->orWhere('description', 'ilike', "%{$search}%");
+                });
+            }
+
+            if ($request->has('active')) {
+                $query->where('active', filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN));
+            }
+        }, 'created_at');
+    }
+
+    private function paginatedTenantRows(Request $request, string $table, callable $applyFilters, string $sortColumn)
+    {
+        $rows = collect();
+        $tenants = Tenant::where('active', true)->where('id', '!=', 'central')->get();
 
         foreach ($tenants as $tenant) {
             try {
                 tenancy()->initialize($tenant);
 
-                $tickets = DB::table('tickets')
-                    ->select('*', DB::raw("'{$tenant->id}' as tenant_id"))
-                    ->get();
+                if (!Schema::hasTable($table)) {
+                    continue;
+                }
 
-                $allTickets = $allTickets->concat($tickets);
-            } catch (\Throwable $e) {
-                // skip failing tenant
+                $query = DB::table($table);
+                $applyFilters($query);
+
+                $tenantRows = $query->get()->map(fn ($row) => $this->withTenant($row, $tenant));
+                $rows = $rows->concat($tenantRows);
+            } catch (\Throwable) {
+                // Keep the global admin list usable even if one tenant schema is broken.
             } finally {
-                try { tenancy()->end(); } catch (\Throwable $_) {}
+                try {
+                    tenancy()->end();
+                } catch (\Throwable) {
+                }
             }
         }
 
-        $perPage = (int) $request->input('per_page', 15);
-        $page = (int) $request->input('page', 1);
-
-        $paginated = $allTickets->slice(($page - 1) * $perPage, $perPage);
+        $rows = $rows->sortByDesc(fn ($row) => $row->{$sortColumn} ?? null)->values();
+        $perPage = max(1, min((int) $request->input('per_page', 15), 100));
+        $page = max(1, (int) $request->input('page', 1));
+        $paginated = $rows->slice(($page - 1) * $perPage, $perPage)->values();
 
         return response()->json([
-            'data' => $paginated->values(),
+            'data' => $paginated,
             'current_page' => $page,
-            'total' => $allTickets->count(),
+            'total' => $rows->count(),
             'per_page' => $perPage,
-            'last_page' => ceil($allTickets->count() / $perPage),
+            'last_page' => (int) ceil($rows->count() / $perPage),
         ]);
+    }
+
+    private function withTenant(object $row, Tenant $tenant): object
+    {
+        $row->tenant_id = (string) $tenant->id;
+        $row->tenant = [
+            'id' => (string) $tenant->id,
+            'name' => $tenant->name,
+        ];
+
+        return $row;
     }
 }

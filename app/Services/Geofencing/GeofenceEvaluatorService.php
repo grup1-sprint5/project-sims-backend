@@ -6,6 +6,7 @@ use App\Models\Geofence;
 use App\Models\GeofenceEvent;
 use App\Models\GeofenceVehicleState;
 use App\Models\Vehicle;
+use App\Support\Geofencing\PolygonNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -86,11 +87,11 @@ class GeofenceEvaluatorService
     {
         $keys = [];
 
-        if (!empty($vehicle->fleet_id)) {
+        if (! empty($vehicle->fleet_id)) {
             $keys[] = (string) $vehicle->fleet_id;
         }
 
-        if (!empty($vehicle->type)) {
+        if (! empty($vehicle->type)) {
             $keys[] = (string) $vehicle->type;
         }
 
@@ -100,7 +101,7 @@ class GeofenceEvaluatorService
     private function isScheduleActive(Geofence $geofence, CarbonImmutable $now): bool
     {
         $schedule = $geofence->schedule;
-        if (!is_array($schedule) || $schedule === []) {
+        if (! is_array($schedule) || $schedule === []) {
             return true;
         }
 
@@ -110,7 +111,7 @@ class GeofenceEvaluatorService
         $days = $schedule['days'] ?? null;
         if (is_array($days) && $days !== []) {
             $isoDay = (int) $inTz->dayOfWeekIso;
-            if (!in_array($isoDay, array_map('intval', $days), true)) {
+            if (! in_array($isoDay, array_map('intval', $days), true)) {
                 return false;
             }
         }
@@ -118,7 +119,7 @@ class GeofenceEvaluatorService
         $start = $schedule['start'] ?? null;
         $end = $schedule['end'] ?? null;
 
-        if (!$start || !$end) {
+        if (! $start || ! $end) {
             return true;
         }
 
@@ -136,6 +137,7 @@ class GeofenceEvaluatorService
     private function hourStringToMinutes(string $hour): int
     {
         [$h, $m] = explode(':', $hour);
+
         return ((int) $h) * 60 + ((int) $m);
     }
 
@@ -155,13 +157,19 @@ class GeofenceEvaluatorService
         }
 
         $ring = Arr::get($geofence->geometry_geojson, 'coordinates.0', []);
+        $ring = PolygonNormalizer::normalize($ring);
+        if ($ring === null) {
+            return false;
+        }
+
         $inside = $this->pointInPolygon($lng, $lat, $ring);
 
-        if ($inside || !$wasInside || $hysteresis <= 0) {
+        if ($inside || ! $wasInside || $hysteresis <= 0) {
             return $inside;
         }
 
         $distanceToEdge = $this->distanceToPolygonEdgeMeters($lng, $lat, $ring);
+
         return $distanceToEdge <= $hysteresis;
     }
 
@@ -184,7 +192,7 @@ class GeofenceEvaluatorService
                 && ($pointLng < (($lng2 - $lng1) * ($pointLat - $lat1)) / (($lat2 - $lat1) ?: 1e-12) + $lng1);
 
             if ($intersects) {
-                $inside = !$inside;
+                $inside = ! $inside;
             }
         }
 
@@ -304,6 +312,7 @@ class GeofenceEvaluatorService
 
         if (DB::getDriverName() !== 'pgsql') {
             $this->postgisEnabled = false;
+
             return false;
         }
 

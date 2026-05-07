@@ -111,9 +111,14 @@ class TicketController extends Controller
     /**
      * Show a single ticket with messages and user info.
      */
-    public function show(Ticket $ticket)
+    public function show(Request $request, $ticket)
     {
-        $this->authorize('view', $ticket);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $ticket = $this->resolveTicketForRequest($request, $ticket);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('view', $ticket);
+        }
 
         return new TicketResource($ticket->load(['messages.user', 'user']));
     }
@@ -122,9 +127,14 @@ class TicketController extends Controller
      * Update a ticket (title, description, status).
      * Admins can close/reopen; owners can edit their own tickets.
      */
-    public function update(Request $request, Ticket $ticket)
+    public function update(Request $request, $ticket)
     {
-        $this->authorize('update', $ticket);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $ticket = $this->resolveTicketForRequest($request, $ticket);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('update', $ticket);
+        }
 
         $data = $request->validate([
             'vehicle_id'  => ['sometimes', 'nullable', 'exists:vehicles,id'],
@@ -141,11 +151,37 @@ class TicketController extends Controller
     /**
      * Delete a ticket (admin only via tickets.delete permission).
      */
-    public function destroy(Ticket $ticket)
+    public function destroy(Request $request, $ticket)
     {
-        $this->authorize('delete', $ticket);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $ticket = $this->resolveTicketForRequest($request, $ticket);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('delete', $ticket);
+        }
 
         $ticket->delete();
         return response(null, Response::HTTP_NO_CONTENT);
+    }
+
+    private function resolveTicketForRequest(Request $request, int|string|Ticket $id): Ticket
+    {
+        if ($id instanceof Ticket) {
+            return $id;
+        }
+
+        if ($this->isCrossTenantSuperAdminRequest($request)) {
+            $tenant = Tenant::findOrFail((string) $request->query('tenant_id'));
+            tenancy()->initialize($tenant);
+        }
+
+        return Ticket::findOrFail($id);
+    }
+
+    private function isCrossTenantSuperAdminRequest(Request $request): bool
+    {
+        $user = $request->user();
+
+        return $request->filled('tenant_id') && $user && $user->isSuperAdmin();
     }
 }

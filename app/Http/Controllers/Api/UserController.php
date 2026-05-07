@@ -10,7 +10,10 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
@@ -25,16 +28,16 @@ class UserController extends Controller
 
         $authUser = auth()->user();
 
-        // Determine tenant context: from active tenancy or from the user's own tenant_id.
+        // Determine tenant context. A central SuperAdmin may still have a legacy
+        // tenant_id value, but central requests must remain cross-tenant.
         $tenantId = null;
         if (function_exists('tenancy') && tenancy()->initialized) {
             $tenantId = (string) tenant('id');
-        } elseif (!empty($authUser->tenant_id)) {
+        } elseif ($authUser && !$authUser->isSuperAdmin() && !empty($authUser->tenant_id)) {
             $tenantId = (string) $authUser->tenant_id;
         }
 
-        // Only call indexForSuperAdmin for truly central SuperAdmin:
-        // must have SuperAdmin role AND no tenant context (neither tenancy nor tenant_id).
+        // Central SuperAdmin sees users across all tenants.
         if (!$tenantId && $authUser && $authUser->isSuperAdmin()) {
             return $this->indexForSuperAdmin($request);
         }
@@ -63,84 +66,170 @@ class UserController extends Controller
 
     private function indexForSuperAdmin(Request $request)
     {
-        $originalTenant = function_exists('tenant') ? tenant() : null;
-        $rows = collect();
+        $centralConnection = (string) (config('tenancy.database.central_connection')
+            ?? config('database.default')
+            ?? 'pgsql');
+        $prefix  = config('tenancy.database.prefix', 'tenant_');
+        $tenants = Tenant::query()->where('id', '!=', 'central')->get(['id', 'name']);
+        $rows    = collect();
+        $search  = $request->input('search');
+        $roleFilter   = $request->input('role');
+        $activeFilter = $request->input('active');
 
-        // Get all active tenants EXCEPT the "central" tenant (which is for SuperAdmin)
-        $tenants = Tenant::query()->where('active', true)->where('id', '!=', 'central')->get(['id', 'name']);
+        try {
+            $centralUserQuery = DB::connection($centralConnection)
+                ->table('users as u');
+
+            if (Schema::connection($centralConnection)->hasColumn('users', 'deleted_at')) {
+                $centralUserQuery->whereNull('u.deleted_at');
+            }
+
+            if ($search) {
+                $centralUserQuery->where(fn($q) => $q->where('u.name', 'ilike', "%{$search}%")
+                    ->orWhere('u.email', 'ilike', "%{$search}%"));
+            }
+            if (!is_null($activeFilter)) {
+                $centralUserQuery->where('u.active', (bool) $activeFilter);
+            }
+            if ($roleFilter) {
+                $centralUserQuery->whereExists(function ($sub) use ($roleFilter) {
+                    $sub->select(DB::raw(1))
+                        ->from('model_has_roles as mhr')
+                        ->join('roles as rf', 'rf.id', '=', 'mhr.role_id')
+                        ->whereColumn('mhr.model_id', 'u.id')
+                        ->where('mhr.model_type', 'App\\Models\\User')
+                        ->where('rf.name', $roleFilter);
+                });
+            }
+
+            $centralUsers = $centralUserQuery->get();
+            $centralUserIds = $centralUsers->pluck('id')->toArray();
+            $centralRoles = collect();
+
+            if (!empty($centralUserIds)) {
+                try {
+                    $centralRoles = DB::connection($centralConnection)
+                        ->table('model_has_roles as mhr')
+                        ->join('roles as r', 'r.id', '=', 'mhr.role_id')
+                        ->whereIn('mhr.model_id', $centralUserIds)
+                        ->where('mhr.model_type', 'App\\Models\\User')
+                        ->select('mhr.model_id', 'r.id as role_id', 'r.name as role_name', 'r.guard_name')
+                        ->get()
+                        ->groupBy('model_id');
+                } catch (\Throwable $e) {
+                    Log::warning('SuperAdmin user list: central roles unavailable: ' . $e->getMessage());
+                }
+            }
+
+            if (!$request->filled('tenant_id')) {
+                $rows = $rows->concat($centralUsers->map(function ($user) use ($centralRoles) {
+                    $userRoles = ($centralRoles->get($user->id) ?? collect())->map(fn($r) => [
+                        'id'         => $r->role_id,
+                        'name'       => $r->role_name,
+                        'guard_name' => $r->guard_name,
+                    ])->values();
+
+                    return [
+                        'id'         => $user->id,
+                        'name'       => $user->name,
+                        'username'   => $user->username ?? null,
+                        'email'      => $user->email,
+                        'active'     => (bool) $user->active,
+                        'roles'      => $userRoles,
+                        'tenant'     => ['id' => null, 'name' => 'Central'],
+                        'tenant_id'  => null,
+                        'created_at' => $user->created_at,
+                        'updated_at' => $user->updated_at,
+                    ];
+                }));
+            }
+        } catch (\Throwable $e) {
+            Log::error('SuperAdmin user list: central database error: ' . $e->getMessage());
+        }
 
         foreach ($tenants as $tenant) {
+            $schema = '"' . $prefix . $tenant->id . '"';
+
             try {
-                tenancy()->initialize($tenant);
+                // Query users directly via schema-qualified tables — no tenancy init needed.
+                $userQuery = DB::table(DB::raw("{$schema}.users as u"))
+                    ->whereNull('u.deleted_at');
+
+                if ($search) {
+                    $userQuery->where(fn($q) => $q->where('u.name', 'ilike', "%{$search}%")
+                        ->orWhere('u.email', 'ilike', "%{$search}%"));
+                }
+                if (!is_null($activeFilter)) {
+                    $userQuery->where('u.active', (bool) $activeFilter);
+                }
+                if ($roleFilter) {
+                    $userQuery->whereExists(function ($sub) use ($schema, $roleFilter) {
+                        $sub->select(DB::raw(1))
+                            ->from(DB::raw("{$schema}.model_has_roles as mhr"))
+                            ->join(DB::raw("{$schema}.roles as rf"), 'rf.id', '=', 'mhr.role_id')
+                            ->whereColumn('mhr.model_id', 'u.id')
+                            ->where('mhr.model_type', 'App\\Models\\User')
+                            ->where('rf.name', $roleFilter);
+                    });
+                }
+
+                $users = $userQuery->get();
+
+                // Load roles for all users in this schema in one query.
+                $userIds = $users->pluck('id')->toArray();
+                $roles = collect();
+
+                if (!empty($userIds)) {
+                    $roles = DB::table(DB::raw("{$schema}.model_has_roles as mhr"))
+                        ->join(DB::raw("{$schema}.roles as r"), 'r.id', '=', 'mhr.role_id')
+                        ->whereIn('mhr.model_id', $userIds)
+                        ->where('mhr.model_type', 'App\\Models\\User')
+                        ->select('mhr.model_id', 'r.id as role_id', 'r.name as role_name', 'r.guard_name')
+                        ->get()
+                        ->groupBy('model_id');
+                }
+
             } catch (\Throwable $e) {
+                Log::error("SuperAdmin user list: schema {$schema} error: " . $e->getMessage());
                 continue;
             }
 
-            $query = User::with('roles');
+            $tenantCopy = $tenant;
+            $rows = $rows->concat($users->map(function ($user) use ($tenantCopy, $roles) {
+                $userRoles = ($roles->get($user->id) ?? collect())->map(fn($r) => [
+                    'id'         => $r->role_id,
+                    'name'       => $r->role_name,
+                    'guard_name' => $r->guard_name,
+                ])->values();
 
-            if ($search = $request->input('search')) {
-                $query->where(fn($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
-            }
-
-            if ($role = $request->input('role')) {
-                $query->whereHas('roles', fn($q) => $q->where('name', $role));
-            }
-
-            if (!is_null($request->input('active'))) {
-                $query->where('active', (bool) $request->input('active'));
-            }
-
-            $tenantUsers = $query->get()->map(function (User $user) use ($tenant) {
                 return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'username' => $user->username,
-                    'email' => $user->email,
-                    'active' => (bool) $user->active,
-                    'roles' => $user->roles->map(fn($r) => [
-                        'id' => $r->id,
-                        'name' => $r->name,
-                        'guard_name' => $r->guard_name,
-                    ])->values(),
-                    'tenant' => [
-                        'id' => $tenant->id,
-                        'name' => $tenant->name,
-                    ],
-                    'tenant_id' => $tenant->id,
-                    'created_at' => $user->created_at?->toIso8601String(),
-                    'updated_at' => $user->updated_at?->toIso8601String(),
+                    'id'         => $user->id,
+                    'name'       => $user->name,
+                    'username'   => $user->username ?? null,
+                    'email'      => $user->email,
+                    'active'     => (bool) $user->active,
+                    'roles'      => $userRoles,
+                    'tenant'     => ['id' => $tenantCopy->id, 'name' => $tenantCopy->name],
+                    'tenant_id'  => $tenantCopy->id,
+                    'created_at' => $user->created_at,
+                    'updated_at' => $user->updated_at,
                 ];
-            });
-
-            $rows = $rows->concat($tenantUsers);
-        }
-
-        if ($originalTenant) {
-            tenancy()->initialize($originalTenant);
-        } else {
-            tenancy()->end();
+            }));
         }
 
         if ($tenantFilter = $request->input('tenant_id')) {
             $rows = $rows->where('tenant_id', $tenantFilter)->values();
         }
 
-        $rows = $rows->sortByDesc('created_at')->values();
-
+        $rows    = $rows->sortByDesc('created_at')->values();
         $perPage = min((int) $request->input('per_page', 15), 100);
-        $page = max((int) $request->input('page', 1), 1);
-        $total = $rows->count();
-        $slice = $rows->slice(($page - 1) * $perPage, $perPage)->values();
+        $page    = max((int) $request->input('page', 1), 1);
+        $total   = $rows->count();
+        $slice   = $rows->slice(($page - 1) * $perPage, $perPage)->values();
 
         $paginator = new LengthAwarePaginator(
-            $slice,
-            $total,
-            $perPage,
-            $page,
-            [
-                'path' => $request->url(),
-                'query' => $request->query(),
-            ]
+            $slice, $total, $perPage, $page,
+            ['path' => $request->url(), 'query' => $request->query()]
         );
 
         return response()->json($paginator);
@@ -149,9 +238,14 @@ class UserController extends Controller
     /**
      * Show a specific user.
      */
-    public function show(User $user)
+    public function show(Request $request, $user)
     {
-        $this->authorize('view', $user);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $user = $this->resolveUserForRequest($request, $user);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('view', $user);
+        }
 
         return new UserResource($user->load(['roles', 'tenant']));
     }
@@ -171,6 +265,15 @@ class UserController extends Controller
 
         // When a tenant_id is provided (superadmin creating a user for a specific tenant),
         // switch to that tenant's database so the user lands in the right schema.
+        // Resolve role name BEFORE switching tenancy: IDs may differ across schemas.
+        $roleName = null;
+        if ($roleId) {
+            $roleName = Role::find($roleId)?->name;
+        }
+
+        $authUser = auth()->user();
+        $isSuperAdmin = $authUser && $authUser->isSuperAdmin();
+
         if ($tenantId) {
             $tenant = \App\Models\Tenant::find($tenantId);
             if (!$tenant) {
@@ -183,16 +286,22 @@ class UserController extends Controller
 
         $user = User::create($data);
 
-        if ($roleId) {
-            $role = Role::find($roleId);
+        if ($roleName) {
+            // Find role by NAME in the current (possibly tenant) context to avoid ID mismatches.
+            $role = Role::where('name', $roleName)->first();
             if ($role) {
-                $authUser = auth()->user();
-                $isSuperAdmin = $authUser && $authUser->isSuperAdmin();
                 if (strtolower($role->name) === 'superadmin' && !$isSuperAdmin) {
                     $user->delete();
                     return response()->json(['message' => 'Only SuperAdmin can assign the SuperAdmin role.'], 403);
                 }
-                $user->assignRole($role);
+                // syncRoles replaces the default "Client" role assigned in User::booted.
+                $user->syncRoles([$role]);
+            }
+        } elseif (!$authUser) {
+            // Public self-registration: assign Client role by default.
+            $clientRole = Role::where('name', 'Client')->first();
+            if ($clientRole) {
+                $user->assignRole($clientRole);
             }
         }
 
@@ -202,9 +311,14 @@ class UserController extends Controller
     /**
      * Update a user.
      */
-    public function update(UpdateUserRequest $request, User $user)
+    public function update(UpdateUserRequest $request, $user)
     {
-        $this->authorize('update', $user);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $user = $this->resolveUserForRequest($request, $user);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('update', $user);
+        }
 
         $data = $request->validated();
 
@@ -232,9 +346,14 @@ class UserController extends Controller
     /**
      * Delete a user.
      */
-    public function destroy(User $user)
+    public function destroy(Request $request, $user)
     {
-        $this->authorize('delete', $user);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $user = $this->resolveUserForRequest($request, $user);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('delete', $user);
+        }
 
         $user->delete();
 
@@ -253,5 +372,26 @@ class UserController extends Controller
         $user->restore();
 
         return new UserResource($user->load('roles', 'tenant'));
+    }
+
+    private function resolveUserForRequest(Request $request, int|string $id): User
+    {
+        $tenantId = $request->query('tenant_id');
+
+        if ($this->isCrossTenantSuperAdminRequest($request)) {
+            $tenant = Tenant::findOrFail($tenantId);
+            tenancy()->initialize($tenant);
+
+            return User::findOrFail($id);
+        }
+
+        return User::findOrFail($id);
+    }
+
+    private function isCrossTenantSuperAdminRequest(Request $request): bool
+    {
+        $authUser = auth()->user();
+
+        return $request->filled('tenant_id') && $authUser && $authUser->isSuperAdmin();
     }
 }

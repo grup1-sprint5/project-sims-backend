@@ -2,6 +2,7 @@
 
 namespace App\Rules;
 
+use App\Support\Geofencing\PolygonNormalizer;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
@@ -9,40 +10,37 @@ class ValidPolygonCoordinates implements ValidationRule
 {
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        if (!is_array($value) || count($value) < 4) {
-            $fail('Polygon must include at least 4 coordinates and be closed.');
+        $ring = PolygonNormalizer::normalize($value);
+        if ($ring === null) {
+            $fail('Polygon must include at least 3 valid coordinates.');
+
             return;
         }
 
-        foreach ($value as $coordinate) {
-            if (!is_array($coordinate) || count($coordinate) !== 2) {
+        foreach ($ring as $coordinate) {
+            if (! is_array($coordinate) || count($coordinate) !== 2) {
                 $fail('Each polygon coordinate must be [lng, lat].');
+
                 return;
             }
 
             $lng = $coordinate[0] ?? null;
             $lat = $coordinate[1] ?? null;
 
-            if (!is_numeric($lng) || !is_numeric($lat)) {
+            if (! is_numeric($lng) || ! is_numeric($lat)) {
                 $fail('Polygon coordinates must be numeric.');
+
                 return;
             }
 
             if ((float) $lat < -90 || (float) $lat > 90 || (float) $lng < -180 || (float) $lng > 180) {
                 $fail('Polygon coordinates are out of range.');
+
                 return;
             }
         }
 
-        $first = $value[0];
-        $last = $value[count($value) - 1];
-
-        if ((float) $first[0] !== (float) $last[0] || (float) $first[1] !== (float) $last[1]) {
-            $fail('Polygon must be closed (first coordinate equals last coordinate).');
-            return;
-        }
-
-        if ($this->hasSelfIntersections($value)) {
+        if ($this->hasSelfIntersections($ring)) {
             $fail('Polygon cannot self-intersect.');
         }
     }

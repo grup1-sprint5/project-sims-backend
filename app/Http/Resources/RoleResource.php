@@ -18,6 +18,8 @@ class RoleResource extends JsonResource
             'id'          => $this->id,
             'name'        => $this->name,
             'guard_name'  => $this->guard_name,
+            'tenant_id'   => $this->tenant_id,
+            'tenant'      => $this->tenant_id ? ['id' => $this->tenant_id, 'name' => $this->tenant_id] : null,
             'permissions' => $this->whenLoaded('permissions', fn() =>
                 $this->permissions->map(fn($p) => [
                     'id'   => $p->id,
