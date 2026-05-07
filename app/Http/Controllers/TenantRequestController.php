@@ -114,6 +114,24 @@ class TenantRequestController extends Controller
         ]);
     }
 
+    // Admin: reject request
+    public function reject(Request $request, $id)
+    {
+        $user = auth()->user();
+        if (!$user || !method_exists($user, 'isSuperAdmin') || !$user->isSuperAdmin()) {
+            abort(403);
+        }
+
+        $req = TenantRequest::findOrFail($id);
+        if ($req->status !== 'pending') {
+            return response()->json(['message' => 'Request is not pending'], 409);
+        }
+
+        $req->update(['status' => 'rejected']);
+
+        return response()->json(['message' => 'Rejected', 'request' => $req]);
+    }
+
     // Public: check if a slug is available (not used by Tenant or pending request)
     public function checkSlug(Request $request)
     {

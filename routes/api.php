@@ -44,4 +44,5 @@ Route::middleware([
 Route::middleware(['auth:sanctum'])->group(function () {
 	Route::get('/tenant-requests', [TenantRequestController::class, 'index']);
 	Route::post('/tenant-requests/{id}/approve', [TenantRequestController::class, 'approve']);
+	Route::post('/tenant-requests/{id}/reject', [TenantRequestController::class, 'reject']);
 });
