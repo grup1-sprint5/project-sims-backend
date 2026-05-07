@@ -2,22 +2,25 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 class SensorDataService
 {
     private function iotBaseUrl(): string
     {
-        $base = env('IOT_MICROSERVICE_URL')
-            ?? env('IOT_API_URL')
-            ?? 'http://host.docker.internal:8002';
+        $base = config('services.iot.url', 'http://iot_api:8000');
+
+        if (in_array($base, ['http://host.docker.internal:8002', 'http://host.docker.internal:8000'], true)) {
+            $base = 'http://iot_api:8000';
+        }
 
         return rtrim((string) $base, '/');
     }
 
     private function iotTimeoutSeconds(): int
     {
-        return (int) (env('IOT_TIMEOUT', 3));
+        return (int) config('services.iot.timeout', 3);
     }
 
     /**
@@ -27,9 +30,17 @@ class SensorDataService
     {
         $url = $this->iotBaseUrl() . $path;
 
-        $res = Http::timeout($this->iotTimeoutSeconds())
-            ->acceptJson()
-            ->get($url, $query);
+        try {
+            $res = Http::timeout($this->iotTimeoutSeconds())
+                ->acceptJson()
+                ->get($url, $query);
+        } catch (ConnectionException $e) {
+            return [
+                'success' => false,
+                'message' => 'IoT microservice unreachable: ' . $e->getMessage(),
+                'status' => 503,
+            ];
+        }
 
         if (!$res->successful()) {
             return [
@@ -49,9 +60,17 @@ class SensorDataService
     {
         $url = $this->iotBaseUrl() . $path;
 
-        $res = Http::timeout($this->iotTimeoutSeconds())
-            ->acceptJson()
-            ->post($url, $payload);
+        try {
+            $res = Http::timeout($this->iotTimeoutSeconds())
+                ->acceptJson()
+                ->post($url, $payload);
+        } catch (ConnectionException $e) {
+            return [
+                'success' => false,
+                'message' => 'IoT microservice unreachable: ' . $e->getMessage(),
+                'status' => 503,
+            ];
+        }
 
         if (!$res->successful()) {
             return [

@@ -26,15 +26,22 @@ class RolesSeeder extends Seeder
         $tenantAdminRole->syncPermissions([
             'users.view',
             'users.manage',
+            'users.delete',
             'roles.view',
+            'roles.manage',
+            'roles.delete',
             'vehicles.view',
             'vehicles.manage',
+            'vehicles.delete',
             'geofences.view',
             'geofences.manage',
+            'geofences.delete',
             'tickets.view',
             'tickets.manage',
+            'tickets.delete',
             'reservations.view',
             'reservations.manage',
+            'reservations.delete',
             'tenants.view',
         ]);
 

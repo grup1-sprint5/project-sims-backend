@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Http\Requests\Tenant\StoreTenantRequest;
 use App\Http\Requests\Tenant\UpdateTenantRequest;
 use App\Http\Resources\TenantResource;
+use App\Services\TenantProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -79,10 +80,15 @@ class TenantController extends Controller
         unset($data['slug']);
 
         $tenant = Tenant::create($data);
+        $provisioning = app(TenantProvisioningService::class)->provision($tenant);
+        $tenant->loadMissing('domains');
 
         return response()->json([
             'message' => 'Tenant creado correctamente',
             'data'    => new TenantResource($tenant),
+            'domains' => $provisioning['domains'],
+            'credentials' => $provisioning['credentials'],
+            'default_password' => $provisioning['password'],
         ], 201);
     }
 
