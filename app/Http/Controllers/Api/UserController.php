@@ -9,9 +9,11 @@ use App\Http\Resources\UserResource;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
@@ -64,12 +66,86 @@ class UserController extends Controller
 
     private function indexForSuperAdmin(Request $request)
     {
+        $centralConnection = (string) (config('tenancy.database.central_connection')
+            ?? config('database.default')
+            ?? 'pgsql');
         $prefix  = config('tenancy.database.prefix', 'tenant_');
         $tenants = Tenant::query()->where('id', '!=', 'central')->get(['id', 'name']);
         $rows    = collect();
         $search  = $request->input('search');
         $roleFilter   = $request->input('role');
         $activeFilter = $request->input('active');
+
+        try {
+            $centralUserQuery = DB::connection($centralConnection)
+                ->table('users as u');
+
+            if (Schema::connection($centralConnection)->hasColumn('users', 'deleted_at')) {
+                $centralUserQuery->whereNull('u.deleted_at');
+            }
+
+            if ($search) {
+                $centralUserQuery->where(fn($q) => $q->where('u.name', 'ilike', "%{$search}%")
+                    ->orWhere('u.email', 'ilike', "%{$search}%"));
+            }
+            if (!is_null($activeFilter)) {
+                $centralUserQuery->where('u.active', (bool) $activeFilter);
+            }
+            if ($roleFilter) {
+                $centralUserQuery->whereExists(function ($sub) use ($roleFilter) {
+                    $sub->select(DB::raw(1))
+                        ->from('model_has_roles as mhr')
+                        ->join('roles as rf', 'rf.id', '=', 'mhr.role_id')
+                        ->whereColumn('mhr.model_id', 'u.id')
+                        ->where('mhr.model_type', 'App\\Models\\User')
+                        ->where('rf.name', $roleFilter);
+                });
+            }
+
+            $centralUsers = $centralUserQuery->get();
+            $centralUserIds = $centralUsers->pluck('id')->toArray();
+            $centralRoles = collect();
+
+            if (!empty($centralUserIds)) {
+                try {
+                    $centralRoles = DB::connection($centralConnection)
+                        ->table('model_has_roles as mhr')
+                        ->join('roles as r', 'r.id', '=', 'mhr.role_id')
+                        ->whereIn('mhr.model_id', $centralUserIds)
+                        ->where('mhr.model_type', 'App\\Models\\User')
+                        ->select('mhr.model_id', 'r.id as role_id', 'r.name as role_name', 'r.guard_name')
+                        ->get()
+                        ->groupBy('model_id');
+                } catch (\Throwable $e) {
+                    Log::warning('SuperAdmin user list: central roles unavailable: ' . $e->getMessage());
+                }
+            }
+
+            if (!$request->filled('tenant_id')) {
+                $rows = $rows->concat($centralUsers->map(function ($user) use ($centralRoles) {
+                    $userRoles = ($centralRoles->get($user->id) ?? collect())->map(fn($r) => [
+                        'id'         => $r->role_id,
+                        'name'       => $r->role_name,
+                        'guard_name' => $r->guard_name,
+                    ])->values();
+
+                    return [
+                        'id'         => $user->id,
+                        'name'       => $user->name,
+                        'username'   => $user->username ?? null,
+                        'email'      => $user->email,
+                        'active'     => (bool) $user->active,
+                        'roles'      => $userRoles,
+                        'tenant'     => ['id' => null, 'name' => 'Central'],
+                        'tenant_id'  => null,
+                        'created_at' => $user->created_at,
+                        'updated_at' => $user->updated_at,
+                    ];
+                }));
+            }
+        } catch (\Throwable $e) {
+            Log::error('SuperAdmin user list: central database error: ' . $e->getMessage());
+        }
 
         foreach ($tenants as $tenant) {
             $schema = '"' . $prefix . $tenant->id . '"';
@@ -101,13 +177,17 @@ class UserController extends Controller
 
                 // Load roles for all users in this schema in one query.
                 $userIds = $users->pluck('id')->toArray();
-                $roles   = DB::table(DB::raw("{$schema}.model_has_roles as mhr"))
-                    ->join(DB::raw("{$schema}.roles as r"), 'r.id', '=', 'mhr.role_id')
-                    ->whereIn('mhr.model_id', $userIds)
-                    ->where('mhr.model_type', 'App\\Models\\User')
-                    ->select('mhr.model_id', 'r.id as role_id', 'r.name as role_name', 'r.guard_name')
-                    ->get()
-                    ->groupBy('model_id');
+                $roles = collect();
+
+                if (!empty($userIds)) {
+                    $roles = DB::table(DB::raw("{$schema}.model_has_roles as mhr"))
+                        ->join(DB::raw("{$schema}.roles as r"), 'r.id', '=', 'mhr.role_id')
+                        ->whereIn('mhr.model_id', $userIds)
+                        ->where('mhr.model_type', 'App\\Models\\User')
+                        ->select('mhr.model_id', 'r.id as role_id', 'r.name as role_name', 'r.guard_name')
+                        ->get()
+                        ->groupBy('model_id');
+                }
 
             } catch (\Throwable $e) {
                 Log::error("SuperAdmin user list: schema {$schema} error: " . $e->getMessage());
@@ -147,7 +227,7 @@ class UserController extends Controller
         $total   = $rows->count();
         $slice   = $rows->slice(($page - 1) * $perPage, $perPage)->values();
 
-        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+        $paginator = new LengthAwarePaginator(
             $slice, $total, $perPage, $page,
             ['path' => $request->url(), 'query' => $request->query()]
         );
