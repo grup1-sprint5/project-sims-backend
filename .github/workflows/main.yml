@@ -17,6 +17,17 @@ jobs:
           sudo apt-get install -y netcat-openbsd
           nc -vz ${{ secrets.DEPLOY_HOST_IP }} 1303
 
+      - name: Fix permissions before upload
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 1303
+          script: |
+            sudo chown -R $USER:www-data /var/www/sims-back/app || true
+            sudo chmod -R u+w /var/www/sims-back/app || true
+
       - name: Upload Files (SCP)
         uses: appleboy/scp-action@v0.1.7
         with:
