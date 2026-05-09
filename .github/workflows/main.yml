@@ -120,6 +120,16 @@ jobs:
               -e "IA_API_URL=https://generativelanguage.googleapis.com/v1beta/openai" \
               -e "IA_MODEL=gemini-2.0-flash-lite" \
               -e "IA_API_KEY=${{ secrets.IA_API_KEY }}" \
-              project_sims_app php artisan config:cache || true
+              project_sims_app php artisan config:cache
             docker exec project_sims_app php artisan route:cache || true
             docker exec project_sims_app php artisan view:cache || true
+
+            # Verify IA_API_KEY was baked into the config cache
+            CACHED_KEY_LEN=$(docker exec project_sims_app php -r "echo strlen(config('services.ia.key'));")
+            echo "Cached IA_API_KEY length: $CACHED_KEY_LEN"
+            if [ "${CACHED_KEY_LEN:-0}" -lt 10 ]; then
+              echo "ERROR: IA_API_KEY was not cached correctly"
+              exit 1
+            fi
+            CACHED_MODEL=$(docker exec project_sims_app php -r "echo config('services.ia.model');")
+            echo "Cached model: $CACHED_MODEL"
