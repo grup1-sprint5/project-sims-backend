@@ -80,9 +80,11 @@ jobs:
             # Install PHP dependencies (non-dev) and optimize autoloader
             composer install --no-dev --prefer-dist --no-interaction || true
 
-            # Recreate app container so it picks up updated .env vars (env_file is read at startup)
-            docker compose up -d --no-deps --force-recreate app || docker-compose up -d --no-deps --force-recreate app || true
-            sleep 12
+            # Restart app container so it picks up updated .env vars (env_file is read at startup)
+            docker stop project_sims_app 2>/dev/null || true
+            docker rm project_sims_app 2>/dev/null || true
+            docker compose up -d app 2>/dev/null || docker-compose up -d app 2>/dev/null || true
+            sleep 25
 
             # Run application migrations inside Docker container
             docker exec project_sims_app php artisan migrate --force || true
