@@ -39,6 +39,27 @@ jobs:
           target: "/var/www/sims-back"
           rm: false
 
+      - name: Diagnose container state
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 1303
+          script: |
+            echo "=== ALL CONTAINERS ==="
+            docker ps -a
+            echo "=== IMAGES ==="
+            docker images | grep -E "sims|project"
+            echo "=== DOCKER COMPOSE VERSION ==="
+            docker compose version 2>/dev/null || docker-compose version 2>/dev/null || echo "NO docker-compose found"
+            echo "=== APP LOGS (last 30 lines) ==="
+            docker logs project_sims_app --tail 30 2>&1 || echo "Container does not exist"
+            echo "=== COMPOSE UP OUTPUT ==="
+            cd /var/www/sims-back && docker-compose up -d app 2>&1 || true
+            echo "=== CONTAINER STATE AFTER UP ==="
+            docker ps -a | grep sims
+
       - name: Execute Remote Commands
         uses: appleboy/ssh-action@v1.0.3
         with:
