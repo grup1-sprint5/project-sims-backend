@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ChatController extends Controller
 {
@@ -52,6 +53,14 @@ class ChatController extends Controller
         $apiKey = config('services.ia.key');
         $model  = config('services.ia.model');
 
+        if (empty($apiKey)) {
+            Log::error('ChatController: IA_API_KEY is not configured');
+            return response()->json(
+                ['error' => 'El servei d\'IA no està configurat. Contacta amb l\'administrador.'],
+                503
+            );
+        }
+
         try {
             $response = Http::withToken($apiKey)
                 ->timeout(120)
@@ -60,7 +69,8 @@ class ChatController extends Controller
                     'messages' => $messages,
                     'stream'   => false,
                 ]);
-        } catch (ConnectionException) {
+        } catch (ConnectionException $e) {
+            Log::error('ChatController: connection error', ['error' => $e->getMessage(), 'url' => $apiUrl]);
             return response()->json(
                 ['error' => 'El servei d\'IA no respon. Torna-ho a intentar en uns moments.'],
                 503
@@ -68,6 +78,12 @@ class ChatController extends Controller
         }
 
         if ($response->failed()) {
+            Log::error('ChatController: AI API error', [
+                'status' => $response->status(),
+                'body'   => $response->body(),
+                'url'    => $apiUrl,
+                'model'  => $model,
+            ]);
             return response()->json(
                 ['error' => 'El servei d\'IA no està disponible en aquest moment. Torna-ho a intentar més tard.'],
                 503

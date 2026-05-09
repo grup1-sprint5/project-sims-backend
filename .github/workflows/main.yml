@@ -39,6 +39,15 @@ jobs:
           target: "/var/www/sims-back"
           rm: false
 
+      - name: Check IA_API_KEY secret is set
+        run: |
+          KEY="${{ secrets.IA_API_KEY }}"
+          echo "IA_API_KEY length: ${#KEY}"
+          if [ -z "$KEY" ]; then
+            echo "ERROR: IA_API_KEY secret is empty or not accessible to this repo"
+            exit 1
+          fi
+
       - name: Update AI env vars on server
         uses: appleboy/ssh-action@v1.0.3
         with:
