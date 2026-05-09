@@ -39,27 +39,6 @@ jobs:
           target: "/var/www/sims-back"
           rm: false
 
-      - name: Diagnose container state
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST_IP }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: 1303
-          script: |
-            echo "=== ALL CONTAINERS ==="
-            docker ps -a
-            echo "=== IMAGES ==="
-            docker images | grep -E "sims|project"
-            echo "=== DOCKER COMPOSE VERSION ==="
-            docker compose version 2>/dev/null || docker-compose version 2>/dev/null || echo "NO docker-compose found"
-            echo "=== APP LOGS (last 30 lines) ==="
-            docker logs project_sims_app --tail 30 2>&1 || echo "Container does not exist"
-            echo "=== COMPOSE UP OUTPUT ==="
-            cd /var/www/sims-back && docker-compose up -d app 2>&1 || true
-            echo "=== CONTAINER STATE AFTER UP ==="
-            docker ps -a | grep sims
-
       - name: Execute Remote Commands
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -83,9 +62,25 @@ jobs:
             # Install PHP dependencies (non-dev) and optimize autoloader
             composer install --no-dev --prefer-dist --no-interaction || true
 
-            # Ensure container is running (recover if stopped/removed by a previous failed deploy)
-            docker start project_sims_app 2>/dev/null || docker-compose up -d app 2>/dev/null || true
-            sleep 10
+            # Recover DB container if stopped or renamed (docker-compose v1 bug renames containers)
+            DB_CONTAINER=$(docker ps -a --filter "ancestor=postgres:15" --filter "status=exited" --format "{{.Names}}" | head -1)
+            if [ -n "$DB_CONTAINER" ]; then
+              echo "Starting DB: $DB_CONTAINER"
+              docker start "$DB_CONTAINER"
+              docker rename "$DB_CONTAINER" project_sims_db 2>/dev/null || true
+              sleep 6
+            fi
+
+            # Recover App container if stopped or renamed
+            APP_CONTAINER=$(docker ps -a --filter "ancestor=project-sims-backend_app" --filter "status=exited" --format "{{.Names}}" | grep -v scheduler | head -1)
+            if [ -n "$APP_CONTAINER" ]; then
+              echo "Starting App: $APP_CONTAINER"
+              docker start "$APP_CONTAINER"
+              docker rename "$APP_CONTAINER" project_sims_app 2>/dev/null || true
+            fi
+            # Also try by name in case it's already correctly named but stopped
+            docker start project_sims_app 2>/dev/null || true
+            sleep 20
 
             # Run application migrations inside Docker container
             docker exec project_sims_app php artisan migrate --force || true
