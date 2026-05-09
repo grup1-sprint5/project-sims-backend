@@ -37,13 +37,13 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | IA Chat (OpenWebUI compatible)
+    | IA Chat (Google Gemini - OpenAI compatible endpoint)
     |--------------------------------------------------------------------------
     */
     'ia' => [
-        'url'   => env('IA_API_URL', 'http://api-ia.daw2.iesmontsia.org:3000/api'),
+        'url'   => env('IA_API_URL', 'https://generativelanguage.googleapis.com/v1beta/openai'),
         'key'   => env('IA_API_KEY'),
-        'model' => env('IA_MODEL', 'llama3.2:3b'),
+        'model' => env('IA_MODEL', 'gemini-2.0-flash-lite'),
     ],
 
     /*
