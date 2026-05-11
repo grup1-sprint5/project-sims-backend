@@ -115,7 +115,7 @@ class InitializeTenancyByDomainOrHeader
         }
 
         // If we reached here, no tenant was identified
-        if (in_array($host, $centralDomains)) {
+        if (in_array($host, $centralDomains) && $this->canRunWithoutTenant($request)) {
             return $next($request);
         }
 
@@ -127,5 +127,10 @@ class InitializeTenancyByDomainOrHeader
         }
 
         abort(400, 'Tenant not identified.');
+    }
+
+    private function canRunWithoutTenant(Request $request): bool
+    {
+        return $request->is('api/user') || $request->is('api/tenant/info');
     }
 }
