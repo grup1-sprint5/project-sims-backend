@@ -51,21 +51,21 @@ trait TenantTestHelpers
         $this->seed(RolesSeeder::class);
 
         // Create tenants
-        $this->tenant1 = Tenant::create([
+        $this->tenant1 = Tenant::withoutEvents(fn () => Tenant::create([
+            'id' => 'sims-corp',
             'name' => 'SIMS Corp',
-            'slug' => 'sims-corp',
             'tax_id' => 'B12345678',
             'email' => 'info@simscorp.com',
             'active' => true,
-        ]);
+        ]));
 
-        $this->tenant2 = Tenant::create([
+        $this->tenant2 = Tenant::withoutEvents(fn () => Tenant::create([
+            'id' => 'ecomove',
             'name' => 'EcoMove',
-            'slug' => 'ecomove',
             'tax_id' => 'B87654321',
             'email' => 'info@ecomove.es',
             'active' => true,
-        ]);
+        ]));
 
         // Create SuperAdmin (no tenant)
         $this->superAdmin = User::withoutGlobalScopes()->create([

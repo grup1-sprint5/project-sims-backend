@@ -10,6 +10,15 @@ class CheckTenantActiveTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_central_health_endpoint_works(): void
+    {
+        // Central routes don't use tenant activity middleware.
+        $response = $this->getJson('/api/health');
+
+        $response->assertStatus(200);
+        $this->assertEquals('ok', $response->json('status'));
+    }
+
     public function test_inactive_tenant_gets_403_on_login(): void
     {
         $tenant = Tenant::create([

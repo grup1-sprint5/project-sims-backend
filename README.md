@@ -60,6 +60,45 @@ docker compose exec app php artisan tenants:migrate --no-interaction
 docker compose exec app php artisan tenants:seed --class="Database\\Seeders\\DatabaseSeeder" --force --no-interaction
 ```
 
+## Run tests on PostgreSQL (isolated DB)
+
+Use a dedicated database for tests so production/dev data is never affected.
+
+1) Create local testing env file
+
+```bash
+cp .env.testing.example .env.testing
+```
+
+2) Configure DB host/port depending on where you run tests
+
+- Running tests from host machine: `DB_HOST=localhost` and `DB_PORT=5433`
+- Running tests inside Docker app container: `DB_HOST=db` and `DB_PORT=5432`
+
+3) Create testing database (only once)
+
+```bash
+psql -h localhost -p 5433 -U project_user -d postgres -c "CREATE DATABASE sims_test;"
+```
+
+4) Run migrations on testing database
+
+```bash
+php artisan migrate --env=testing
+```
+
+5) Run all tests
+
+```bash
+php artisan test --env=testing
+```
+
+Optional: run only unit tests
+
+```bash
+php artisan test --testsuite=Unit --env=testing
+```
+
 ## Login test credentials
 
 Use `organization` on login (`/central/login` flow):
