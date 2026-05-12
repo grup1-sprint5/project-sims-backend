@@ -10,14 +10,22 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuthExchangeController;
+use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\TicketMessageController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\AdminReservationController;
+use App\Http\Controllers\WalletController;
+use App\Http\Controllers\Api\GeofenceController;
+use App\Http\Controllers\Api\GeofenceAssignmentController;
+use App\Http\Controllers\Api\GeofenceEventController;
+use App\Http\Controllers\Api\VehiclePositionController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\TenantDomainController;
+use App\Http\Controllers\Api\SensorDataController;
+use App\Http\Controllers\Api\ActuatorController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,16 +42,27 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
     ->prefix('api')
     ->group(function () {
 
-        Route::post('/login', [AuthController::class, 'login'])->name('tenant.login');
+        // Keep tenant login on a dedicated path to avoid collision with central /api/login.
+        Route::post('/tenant/login', [AuthController::class, 'login'])->name('tenant.login');
         Route::post('/auth/exchange-token', [AuthExchangeController::class, 'exchange'])->name('tenant.exchange');
+        Route::post('/users', [UserController::class, 'store']); // Public registration
+
+        // Public: returns basic tenant info (name, id) for the login page branding.
+        Route::get('/tenant/info', function () {
+            if (!function_exists('tenancy') || !tenancy()->initialized) {
+                return response()->json(['id' => null, 'name' => null]);
+            }
+            $t = tenant();
+            return response()->json(['id' => $t->id, 'name' => $t->name]);
+        });
 
         Route::middleware('auth.tenant-token')->group(function () {
 
             Route::post('/logout', [AuthController::class, 'logout']);
-            Route::get('/user', [AuthController::class, 'user']);
 
-            // Users
-            Route::post('/users', [UserController::class, 'store']);
+            // Note: /user endpoint is defined in routes/api.php to work for both tenant and central users
+            
+            // Users management (Authenticated only)
             Route::post('/users/{user}/restore', [UserController::class, 'restore']);
             Route::apiResource('users', UserController::class)->except(['store']);
 
@@ -56,10 +75,20 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
             Route::get('vehicles-map', [VehicleController::class, 'map']);
             Route::get('vehicles-map-admin', [VehicleController::class, 'adminMap']);
 
+            // Geofencing
+            Route::apiResource('geofences', GeofenceController::class);
+            Route::post('geofences/{geofence}/assignments', [GeofenceAssignmentController::class, 'store']);
+            Route::delete('geofences/{geofence}/assignments/{assignmentId}', [GeofenceAssignmentController::class, 'destroy']);
+            Route::get('geofence-events', [GeofenceEventController::class, 'index']);
+            Route::post('vehicle-positions', [VehiclePositionController::class, 'store'])->middleware('throttle:120,1');
+
             // Tickets
             Route::apiResource('tickets', TicketController::class);
             Route::post('tickets/{ticket}/messages', [TicketMessageController::class, 'store']);
             Route::delete('messages/{message}', [TicketMessageController::class, 'destroy']);
+
+            // AI Chat assistant
+            Route::post('chat', [ChatController::class, 'send']);
 
             // Tenants (admins manage their own tenant; SuperAdmin manages all)
             Route::apiResource('tenants', TenantController::class);
@@ -79,10 +108,24 @@ Route::middleware(['api', InitializeTenancyByDomainOrHeader::class, CheckTenantA
             Route::post('reservations/{reservation}/finish', [ReservationController::class, 'finish']);
             Route::post('reservations/{reservation}/cancel', [ReservationController::class, 'cancel']);
             Route::post('reservations/{reservation}/force-finish', [ReservationController::class, 'forceFinish']);
+            Route::post('reservations/{reservation}/checkout-session', [ReservationController::class, 'createStripeCheckoutSession']);
+
+            // Wallet (Stripe top-up + balance)
+            Route::get('wallet/balance', [WalletController::class, 'balance']);
+            Route::post('wallet/checkout-session', [WalletController::class, 'createStripeCheckoutSession']);
+            Route::post('wallet/confirm-session', [WalletController::class, 'confirmStripeCheckoutSession']);
+
+            // IoT Sensors & Actuator
+            Route::get('sensor-data/devices', [SensorDataController::class, 'devices']);
+            Route::get('sensor-data/devices/{deviceId}/latest', [SensorDataController::class, 'latestByDevice']);
+            Route::get('sensor-data', [SensorDataController::class, 'index']);
+            Route::get('actuator/status', [ActuatorController::class, 'status']);
+            Route::post('actuator', [ActuatorController::class, 'setState']);
 
             // Reservations – admin operations
             Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('reservations', [AdminReservationController::class, 'index'])->name('reservations.index');
+                Route::get('reservations/revenue-summary', [AdminReservationController::class, 'revenueSummary'])->name('reservations.revenue-summary');
                 Route::get('reservations/{id}', [AdminReservationController::class, 'show'])->name('reservations.show');
                 Route::put('reservations/{id}', [AdminReservationController::class, 'update'])->name('reservations.update');
                 Route::delete('reservations/{id}', [AdminReservationController::class, 'destroy'])->name('reservations.destroy');

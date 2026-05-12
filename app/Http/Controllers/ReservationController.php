@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 
 class ReservationController extends Controller
 {
@@ -20,6 +21,8 @@ class ReservationController extends Controller
         $user = Auth::user();
         $currentTenant = function_exists('tenant') ? tenant()?->id : null;
 
+        $this->expireOverduePendingReservations($user->hasPermissionTo('reservations.manage') ? null : $user->id);
+
         // Admin/Manager can see reservations (scoped by tenant via global scope)
         if ($user->hasPermissionTo('reservations.manage')) {
             // SuperAdmin accessing from "central" tenant sees all reservations from all other tenants
@@ -27,15 +30,18 @@ class ReservationController extends Controller
                 return $this->indexForSuperAdmin();
             }
 
-            $query = Reservation::with(['user', 'vehicle', 'trip', 'tenant'])
+            $reservations = Reservation::with(['user', 'vehicle', 'trip', 'tenant'])
                 ->orderBy('scheduled_start', 'desc');
-            return $query->get();
+
+            return $this->normalizeReservationCollectionForResponse($reservations->get());
         }
 
-        return Reservation::where('user_id', $user->id)
+        $reservations = Reservation::where('user_id', $user->id)
             ->with(['vehicle', 'trip'])
             ->orderBy('scheduled_start', 'desc')
             ->get();
+
+        return $this->normalizeReservationCollectionForResponse($reservations);
     }
 
     private function indexForSuperAdmin()
@@ -54,6 +60,7 @@ class ReservationController extends Controller
                 ->get()
                 ->map(function ($reservation) use ($tenant) {
                     $data = $reservation->toArray();
+                    $data = $this->normalizeReservationArrayForResponse($data);
                     $data['tenant_id'] = $tenant->id;
                     $data['tenant'] = [
                         'id' => $tenant->id,
@@ -131,8 +138,24 @@ class ReservationController extends Controller
 
             // Calcular preu
             $priceData = $this->calculateReservationPrice($requestedStart, $requestedEnd);
+            $finalPrice = (float) ($priceData['final_price'] ?? 0);
             
             $activationDeadline = $requestedStart->copy()->addMinutes(20);
+
+            $paymentProvider = 'stripe';
+            $paymentStatus = 'unpaid';
+            $paidAt = null;
+
+            // If user already has wallet funds, auto-charge and keep booking ready to activate.
+            $currentWalletBalance = (float) ($user->wallet_balance ?? 0);
+            if ($finalPrice > 0 && $currentWalletBalance >= $finalPrice) {
+                $user->update([
+                    'wallet_balance' => round($currentWalletBalance - $finalPrice, 2),
+                ]);
+                $paymentProvider = 'wallet';
+                $paymentStatus = 'paid';
+                $paidAt = now();
+            }
 
             $reservation = $user->reservations()->create([
                 'vehicle_id' => $vehicle->id,
@@ -140,7 +163,10 @@ class ReservationController extends Controller
                 'scheduled_start' => $requestedStart,
                 'scheduled_end' => $requestedEnd,
                 'activation_deadline' => $activationDeadline,
-                'total_price' => $priceData['final_price'],
+                'total_price' => $finalPrice,
+                'payment_provider' => $paymentProvider,
+                'payment_status' => $paymentStatus,
+                'paid_at' => $paidAt,
                 'status' => 'pending',
             ]);
 
@@ -155,19 +181,28 @@ class ReservationController extends Controller
     public function show(Reservation $reservation)
     {
         $this->authorize('view', $reservation);
-        return $reservation->load(['vehicle', 'trip']);
+
+        $this->expireReservationIfOverdue($reservation);
+
+        return $this->normalizeReservationForResponse($reservation->load(['vehicle', 'trip']));
     }
 
     public function activate(Request $request, Reservation $reservation)
     {
         $this->authorize('activate', $reservation);
 
+        $this->expireReservationIfOverdue($reservation);
+
         if ($reservation->status !== 'pending') {
             return response()->json(['message' => 'Reservation is not pending.'], 400);
         }
 
-        if (now()->greaterThan($reservation->activation_deadline)) {
-            $reservation->update(['status' => 'expired']);
+        if (($reservation->total_price ?? 0) > 0 && $reservation->payment_status !== 'paid') {
+            return response()->json(['message' => 'Reservation must be paid before activation.'], 402);
+        }
+
+        if ($reservation->isPendingAndOverdue()) {
+            $reservation->markAsExpired();
             return response()->json(['message' => 'Reservation expired.'], 403);
         }
 
@@ -230,6 +265,85 @@ class ReservationController extends Controller
 
         $reservation->update(['status' => 'cancelled']);
         return response()->json(['message' => 'Reservation cancelled.']);
+    }
+
+    /**
+     * Crea una sessio de Stripe Checkout per pagar una reserva pending.
+     */
+    public function createStripeCheckoutSession(Request $request, Reservation $reservation)
+    {
+        $this->authorize('view', $reservation);
+
+        $this->expireReservationIfOverdue($reservation);
+
+        if ($reservation->status !== 'pending') {
+            return response()->json(['message' => 'Only pending reservations can be paid.'], 400);
+        }
+
+        if ($reservation->payment_status === 'paid') {
+            return response()->json(['message' => 'Reservation is already paid.'], 400);
+        }
+
+        $validated = $request->validate([
+            'success_url' => 'nullable|url',
+            'cancel_url' => 'nullable|url',
+        ]);
+
+        $secret = (string) config('services.stripe.secret');
+        if ($secret === '') {
+            return response()->json(['message' => 'Stripe is not configured.'], 500);
+        }
+
+        $amountCents = (int) round(((float) $reservation->total_price) * 100);
+        if ($amountCents <= 0) {
+            return response()->json(['message' => 'Invalid reservation amount.'], 422);
+        }
+
+        $tenantId = $reservation->tenant_id ?? $request->user()->tenant_id;
+        $successUrl = $validated['success_url'] ?? config('services.stripe.success_url');
+        $cancelUrl = $validated['cancel_url'] ?? config('services.stripe.cancel_url');
+
+        if (!$successUrl || !$cancelUrl) {
+            return response()->json(['message' => 'Missing success/cancel URL for Stripe checkout.'], 500);
+        }
+
+        $sessionResponse = Http::asForm()
+            ->withBasicAuth($secret, '')
+            ->post('https://api.stripe.com/v1/checkout/sessions', [
+                'mode' => 'payment',
+                'success_url' => $successUrl,
+                'cancel_url' => $cancelUrl,
+                'client_reference_id' => (string) $reservation->id,
+                'metadata[reservation_id]' => (string) $reservation->id,
+                'metadata[tenant_id]' => (string) $tenantId,
+                'metadata[user_id]' => (string) $reservation->user_id,
+                'line_items[0][price_data][currency]' => 'eur',
+                'line_items[0][price_data][unit_amount]' => $amountCents,
+                'line_items[0][price_data][product_data][name]' => 'Reserva #' . $reservation->id,
+                'line_items[0][quantity]' => 1,
+            ]);
+
+        if ($sessionResponse->failed()) {
+            return response()->json([
+                'message' => 'Stripe checkout session could not be created.',
+                'stripe_error' => $sessionResponse->json(),
+            ], 502);
+        }
+
+        $payload = $sessionResponse->json();
+
+        $reservation->update([
+            'payment_provider' => 'stripe',
+            'payment_status' => 'unpaid',
+            'stripe_checkout_session_id' => $payload['id'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Stripe checkout session created.',
+            'session_id' => $payload['id'] ?? null,
+            'checkout_url' => $payload['url'] ?? null,
+            'publishable_key' => config('services.stripe.key'),
+        ]);
     }
 
     /**
@@ -327,5 +441,57 @@ class ReservationController extends Controller
             'price_per_minute' => $pricePerMinute,
             'max_per_hour' => $maxPricePerHour,
         ];
+    }
+
+    private function expireOverduePendingReservations(?int $userId = null): int
+    {
+        $now = now();
+        $query = Reservation::pendingAndOverdue($now);
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->update([
+            'status' => 'expired',
+            'cancelled_at' => $now,
+        ]);
+    }
+
+    private function expireReservationIfOverdue(Reservation $reservation): void
+    {
+        if (!$reservation->isPendingAndOverdue()) {
+            return;
+        }
+
+        $reservation->markAsExpired();
+        $reservation->refresh();
+    }
+
+    private function normalizeReservationCollectionForResponse($reservations)
+    {
+        return $reservations->map(function (Reservation $reservation) {
+            return $this->normalizeReservationForResponse($reservation);
+        });
+    }
+
+    private function normalizeReservationForResponse(Reservation $reservation): Reservation
+    {
+        if ($reservation->scheduled_end === null) {
+            $reservation->setAttribute('scheduled_end', $reservation->activation_deadline ?? $reservation->scheduled_start);
+        }
+
+        return $reservation;
+    }
+
+    private function normalizeReservationArrayForResponse(array $reservation): array
+    {
+        if (($reservation['scheduled_end'] ?? null) !== null) {
+            return $reservation;
+        }
+
+        $reservation['scheduled_end'] = $reservation['activation_deadline'] ?? ($reservation['scheduled_start'] ?? null);
+
+        return $reservation;
     }
 }

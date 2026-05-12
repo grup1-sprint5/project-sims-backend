@@ -16,7 +16,10 @@ class TenantScope implements Scope
      */
     public function apply(Builder $builder, Model $model): void
     {
-        // No-op: schema isolation via stancl/tenancy handles tenant scoping.
+        // isolation via SQL filter
+        if (function_exists('tenancy') && tenancy()->initialized) {
+            $builder->where($model->getTable() . '.tenant_id', tenant('id'));
+        }
     }
 }
 

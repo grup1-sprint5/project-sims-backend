@@ -15,7 +15,8 @@ class PostgreSQLSchemaManager extends BaseManager
 {
     public function makeConnectionConfig(array $baseConfig, string $databaseName): array
     {
-        $baseConfig['search_path'] = $databaseName . ',public';
+        $quotedSchema = '"' . str_replace('"', '""', $databaseName) . '"';
+        $baseConfig['search_path'] = $quotedSchema . ',public';
 
         return $baseConfig;
     }

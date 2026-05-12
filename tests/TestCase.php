@@ -18,4 +18,19 @@ abstract class TestCase extends BaseTestCase
 
         $this->app->make(PermissionRegistrar::class)->forgetCachedPermissions();
     }
+
+    protected function tearDown(): void
+    {
+        if (function_exists('tenancy')) {
+            try {
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
+            } catch (\Throwable) {
+                // Keep PHPUnit teardown focused on rolling back the test database.
+            }
+        }
+
+        parent::tearDown();
+    }
 }

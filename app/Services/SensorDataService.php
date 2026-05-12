@@ -2,23 +2,25 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 class SensorDataService
 {
     private function iotBaseUrl(): string
     {
-        $base = env('IOT_MICROSERVICE_URL')
-            ?? env('IOT_API_URL')
-            ?? 'http://host.docker.internal:8002';
+        $base = config('services.iot.url', 'http://iot_api:8000');
+
+        if (in_array($base, ['http://host.docker.internal:8002', 'http://host.docker.internal:8000'], true)) {
+            $base = 'http://iot_api:8000';
+        }
 
         return rtrim((string) $base, '/');
     }
 
     private function iotTimeoutSeconds(): int
     {
-        return (int) (env('IOT_TIMEOUT', 3));
+        return (int) config('services.iot.timeout', 3);
     }
 
     /**
@@ -28,9 +30,47 @@ class SensorDataService
     {
         $url = $this->iotBaseUrl() . $path;
 
-        $res = Http::timeout($this->iotTimeoutSeconds())
-            ->acceptJson()
-            ->get($url, $query);
+        try {
+            $res = Http::timeout($this->iotTimeoutSeconds())
+                ->acceptJson()
+                ->get($url, $query);
+        } catch (ConnectionException $e) {
+            return [
+                'success' => false,
+                'message' => 'IoT microservice unreachable: ' . $e->getMessage(),
+                'status' => 503,
+            ];
+        }
+
+        if (!$res->successful()) {
+            return [
+                'success' => false,
+                'message' => $res->body() ?: ('IoT microservice error (' . $res->status() . ')'),
+                'status'  => $res->status(),
+            ];
+        }
+
+        return (array) $res->json();
+    }
+
+    /**
+     * Fa una petició POST al microservei IoT (FastAPI) i retorna el JSON.
+     */
+    private function iotPost(string $path, array $payload = []): array
+    {
+        $url = $this->iotBaseUrl() . $path;
+
+        try {
+            $res = Http::timeout($this->iotTimeoutSeconds())
+                ->acceptJson()
+                ->post($url, $payload);
+        } catch (ConnectionException $e) {
+            return [
+                'success' => false,
+                'message' => 'IoT microservice unreachable: ' . $e->getMessage(),
+                'status' => 503,
+            ];
+        }
 
         if (!$res->successful()) {
             return [
@@ -105,5 +145,44 @@ class SensorDataService
 
         $reading = $json['data'] ?? null;
         return is_array($reading) ? $reading : null;
+    }
+
+    /**
+     * Consulta l'estat actual de l'actuador (LED) via microservei IoT.
+     */
+    public function getActuatorStatus(): array
+    {
+        $json = $this->iotGet('/api/actuator/status');
+
+        return [
+            'success' => (bool) ($json['success'] ?? false),
+            'message' => (string) ($json['message'] ?? ''),
+            'current_state' => $json['current_state'] ?? null,
+        ];
+    }
+
+    /**
+     * Envia una ordre ON/OFF a l'actuador (LED) via microservei IoT.
+     */
+    public function setActuatorState(string $state): array
+    {
+        $normalizedState = strtoupper(trim($state));
+        if (!in_array($normalizedState, ['ON', 'OFF'], true)) {
+            return [
+                'success' => false,
+                'message' => "state must be 'ON' or 'OFF'",
+                'current_state' => null,
+            ];
+        }
+
+        $json = $this->iotPost('/api/actuator', [
+            'state' => $normalizedState,
+        ]);
+
+        return [
+            'success' => (bool) ($json['success'] ?? false),
+            'message' => (string) ($json['message'] ?? ''),
+            'current_state' => $json['current_state'] ?? null,
+        ];
     }
 }

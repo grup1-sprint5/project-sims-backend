@@ -60,6 +60,45 @@ docker compose exec app php artisan tenants:migrate --no-interaction
 docker compose exec app php artisan tenants:seed --class="Database\\Seeders\\DatabaseSeeder" --force --no-interaction
 ```
 
+## Run tests on PostgreSQL (isolated DB)
+
+Use a dedicated database for tests so production/dev data is never affected.
+
+1) Create local testing env file
+
+```bash
+cp .env.testing.example .env.testing
+```
+
+2) Configure DB host/port depending on where you run tests
+
+- Running tests from host machine: `DB_HOST=localhost` and `DB_PORT=5433`
+- Running tests inside Docker app container: `DB_HOST=db` and `DB_PORT=5432`
+
+3) Create testing database (only once)
+
+```bash
+psql -h localhost -p 5433 -U project_user -d postgres -c "CREATE DATABASE sims_test;"
+```
+
+4) Run migrations on testing database
+
+```bash
+php artisan migrate --env=testing
+```
+
+5) Run all tests
+
+```bash
+php artisan test --env=testing
+```
+
+Optional: run only unit tests
+
+```bash
+php artisan test --testsuite=Unit --env=testing
+```
+
 ## Login test credentials
 
 Use `organization` on login (`/central/login` flow):
@@ -112,6 +151,12 @@ Notes:
 
 The backend includes a scheduler that auto-cancels pending reservations after `activation_deadline`.
 
+Docker setup (recommended):
+
+```bash
+docker compose up -d scheduler
+```
+
 Production cron:
 
 ```bash
@@ -122,6 +167,36 @@ Local development:
 
 ```bash
 docker compose exec app php artisan schedule:work
+```
+
+## Stripe payments (reservations)
+
+Add these values in `.env`:
+
+```bash
+STRIPE_KEY=pk_test_xxx
+STRIPE_SECRET=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+STRIPE_SUCCESS_URL=http://localhost:5173/client/bookings
+STRIPE_CANCEL_URL=http://localhost:5173/client/bookings
+```
+
+New endpoints:
+
+- `POST /api/reservations/{reservation}/checkout-session` (tenant auth required)
+- `POST /api/payments/stripe/webhook` (central webhook, no auth)
+
+Typical flow:
+
+1. Create reservation (`POST /api/reservations`) -> reservation stays `pending` + `payment_status=unpaid`.
+2. Create checkout session (`POST /api/reservations/{id}/checkout-session`) and redirect user to returned `checkout_url`.
+3. Stripe calls webhook on payment completion and backend marks reservation as `payment_status=paid`.
+4. Reservation activation (`POST /api/reservations/{id}/activate`) is allowed only when payment is completed.
+
+Local webhook testing:
+
+```bash
+stripe listen --forward-to http://localhost:8001/api/payments/stripe/webhook
 ```
 
 ## Full reset (danger: deletes tenant data)

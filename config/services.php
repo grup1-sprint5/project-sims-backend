@@ -37,13 +37,13 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | IA Chat (OpenWebUI compatible)
+    | IA Chat (Groq - OpenAI compatible endpoint)
     |--------------------------------------------------------------------------
     */
     'ia' => [
-        'url'   => env('IA_API_URL', 'http://api-ia.daw2.iesmontsia.org:3000/api'),
+        'url'   => env('IA_API_URL', 'https://api.groq.com/openai/v1'),
         'key'   => env('IA_API_KEY'),
-        'model' => env('IA_MODEL', 'llama3.2:3b'),
+        'model' => env('IA_MODEL', 'llama-3.3-70b-versatile'),
     ],
 
     /*
@@ -56,6 +56,14 @@ return [
     'iot' => [
         'url' => env('IOT_MICROSERVICE_URL', env('IOT_API_URL', 'http://host.docker.internal:8002')),
         'timeout' => (int) env('IOT_TIMEOUT', 3),
+    ],
+
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'success_url' => env('STRIPE_SUCCESS_URL'),
+        'cancel_url' => env('STRIPE_CANCEL_URL'),
     ],
 
 ];

@@ -8,7 +8,12 @@ class StoreUserRequest extends FormRequest
 {
     public function authorize()
     {
-        return $this->user()?->can('create', \App\Models\User::class) ?? false;
+        // Allow public registration if guest, otherwise check permissions for logged admins
+        if (!auth()->check()) {
+            return true;
+        }
+
+        return $this->user()->can('users.manage') || $this->user()->can('users.view');
     }
 
     public function rules()
@@ -17,10 +22,10 @@ class StoreUserRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'min:8'],
             'active' => ['sometimes', 'boolean'],
             'role_id' => ['nullable', 'integer', 'exists:roles,id'],
-            'tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
+            'tenant_id' => ['nullable', 'string', 'exists:tenants,id'],
         ];
     }
 }

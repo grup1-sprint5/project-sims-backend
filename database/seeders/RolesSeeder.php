@@ -17,7 +17,7 @@ class RolesSeeder extends Seeder
         $superAdminRole = Role::firstOrCreate(['name' => 'SuperAdmin', 'guard_name' => 'web']);
         $tenantAdminRole = Role::firstOrCreate(['name' => 'TenantAdmin', 'guard_name' => 'web']);
         $clientRole = Role::firstOrCreate(['name' => 'Client', 'guard_name' => 'web']);
-        $maintenanceRole = Role::firstOrCreate(['name' => 'Maintenance', 'guard_name' => 'web']);
+        $maintenanceRole = Role::firstOrCreate(['name' => 'TenantWorker', 'guard_name' => 'web']);
 
         // SuperAdmin: Full access to all permissions (cross-tenant)
         $superAdminRole->syncPermissions(Permission::all());
@@ -26,13 +26,22 @@ class RolesSeeder extends Seeder
         $tenantAdminRole->syncPermissions([
             'users.view',
             'users.manage',
+            'users.delete',
             'roles.view',
+            'roles.manage',
+            'roles.delete',
             'vehicles.view',
             'vehicles.manage',
+            'vehicles.delete',
+            'geofences.view',
+            'geofences.manage',
+            'geofences.delete',
             'tickets.view',
             'tickets.manage',
+            'tickets.delete',
             'reservations.view',
             'reservations.manage',
+            'reservations.delete',
             'tenants.view',
         ]);
 
@@ -51,6 +60,7 @@ class RolesSeeder extends Seeder
         $maintenanceRole->syncPermissions([
             'vehicles.view',
             'vehicles.manage',
+            'geofences.view',
         ]);
     }
 }

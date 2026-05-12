@@ -21,21 +21,46 @@ class RoleController extends Controller
         $user = auth()->user();
         $query = Role::with('permissions');
 
-        if (!$user->isSuperAdmin()) {
-            $query->where('name', '!=', 'SuperAdmin')
-                ->where(function ($q) use ($user) {
-                    $q->whereNull('tenant_id')
-                        ->orWhere('tenant_id', $user->tenant_id);
-                });
+        // Central SuperAdmin sees roles across all tenants. Some legacy central
+        // SuperAdmin rows still have tenant_id set, so role/context wins here.
+        $isCentralSuperAdmin = !(function_exists('tenancy') && tenancy()->initialized)
+            && $user->isSuperAdmin();
+
+        if (!$isCentralSuperAdmin) {
+            $query->where('name', '!=', 'SuperAdmin');
+
+            if (!empty($user->tenant_id)) {
+                $query->where(fn($q) => $q
+                    ->whereNull('tenant_id')
+                    ->orWhere('tenant_id', $user->tenant_id));
+            }
         }
 
         if ($search = $request->input('search')) {
             $query->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%']);
         }
 
+        if ($isCentralSuperAdmin) {
+            return $this->indexForSuperAdmin($request);
+        }
+
         $perPage = (int) $request->input('per_page', 15);
 
         return RoleResource::collection($query->paginate(min($perPage, 100)));
+    }
+
+    private function indexForSuperAdmin(Request $request)
+    {
+        $query = Role::with('permissions')
+            ->where('guard_name', 'web');
+
+        $perPage = min((int) $request->input('per_page', 15), 100);
+
+        if ($search = $request->input('search')) {
+            $query->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%']);
+        }
+
+        return RoleResource::collection($query->orderBy('id')->paginate($perPage));
     }
 
     /**

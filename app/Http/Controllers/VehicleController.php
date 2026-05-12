@@ -8,6 +8,7 @@ use App\Http\Requests\Vehicle\UpdateVehicleRequest;
 use App\Services\VehicleLocationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\Tenant;
 
 class VehicleController extends Controller
 {
@@ -31,12 +32,12 @@ class VehicleController extends Controller
     {
         $user = $request->user();
         
-        $query = Vehicle::query();
-
-        // Filter by tenant: Super admins (no tenant) see all, others see only their tenant
-        if ($user->tenant_id !== null) {
-            $query->where('tenant_id', $user->tenant_id);
+        // SuperAdmins fetch across all tenants
+        if ($user && $user->isSuperAdmin() && (!function_exists('tenant') || !tenant())) {
+            return app(\App\Http\Controllers\Api\AdminSystemController::class)->vehicles($request);
         }
+
+        $query = Vehicle::query();
 
         // Búsqueda general por license_plate, brand o model
         if ($request->filled('search')) {
@@ -107,9 +108,15 @@ class VehicleController extends Controller
         $longitude = array_key_exists('longitude', $data) ? $data['longitude'] : null;
 
         unset($data['latitude'], $data['longitude']);
-        
-        // Assign tenant_id from authenticated user
-        $data['tenant_id'] = $request->user()->tenant_id;
+
+        // Prefer the active tenancy context; fall back to the user's tenant_id.
+        if (function_exists('tenancy') && tenancy()->initialized) {
+            $data['tenant_id'] = tenant('id');
+        } elseif ($request->user()->tenant_id) {
+            $data['tenant_id'] = $request->user()->tenant_id;
+        } else {
+            return response()->json(['message' => 'No tenant context. Send X-Tenant header.'], 400);
+        }
 
         $vehicle = Vehicle::create($data);
 
@@ -133,9 +140,14 @@ class VehicleController extends Controller
     /**
      * Mostrar un vehículo específico
      */
-    public function show(Vehicle $vehicle): JsonResponse
+    public function show(Request $request, $vehicle): JsonResponse
     {
-        $this->authorize('view', $vehicle);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $vehicle = $this->resolveVehicleForRequest($request, $vehicle);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('view', $vehicle);
+        }
 
         return response()->json([
             'data' => $vehicle,
@@ -145,9 +157,14 @@ class VehicleController extends Controller
     /**
      * Actualizar un vehículo
      */
-    public function update(UpdateVehicleRequest $request, Vehicle $vehicle): JsonResponse
+    public function update(UpdateVehicleRequest $request, $vehicle): JsonResponse
     {
-        $this->authorize('update', $vehicle);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $vehicle = $this->resolveVehicleForRequest($request, $vehicle);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('update', $vehicle);
+        }
 
         $data = $request->validated();
 
@@ -182,9 +199,14 @@ class VehicleController extends Controller
     /**
      * Eliminar un vehículo (soft delete)
      */
-    public function destroy(Vehicle $vehicle): JsonResponse
+    public function destroy(Request $request, $vehicle): JsonResponse
     {
-        $this->authorize('delete', $vehicle);
+        $crossTenantSuperAdmin = $this->isCrossTenantSuperAdminRequest($request);
+        $vehicle = $this->resolveVehicleForRequest($request, $vehicle);
+
+        if (!$crossTenantSuperAdmin) {
+            $this->authorize('delete', $vehicle);
+        }
 
         $this->locationService->deleteLocationByPlate($vehicle->license_plate);
 
@@ -236,10 +258,74 @@ class VehicleController extends Controller
     }
 
     /**
-     * Obtener vehedculos para admin (incluye inactivos y datos extra)
+     * Obtener vehículos para admin (incluye inactivos y datos extra).
+     * En contexto central (superadmin sin tenant) itera todos los tenants.
      */
-    public function adminMap(): JsonResponse
+    public function adminMap(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $inTenantContext = function_exists('tenant') && tenant();
+
+        if (!$inTenantContext) {
+            if (!$user || !$user->isSuperAdmin()) {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+
+            $result = collect();
+            $tenants = Tenant::where('active', true)->where('id', '!=', 'central')->get();
+
+            foreach ($tenants as $tenant) {
+                try {
+                    tenancy()->initialize($tenant);
+
+                    if (!\Illuminate\Support\Facades\Schema::hasTable('vehicles')) {
+                        continue;
+                    }
+
+                    // Fetch locations inside tenant context so SQL fallback reads the right schema
+                    $locations = $this->locationService->getLocations();
+
+                    $tenantVehicles = Vehicle::query()
+                        ->withCount([
+                            'reservations as active_reservations_count' => function ($q) {
+                                $q->whereIn('status', ['pending', 'active', 'confirmed']);
+                            }
+                        ])
+                        ->get();
+
+                    foreach ($tenantVehicles as $vehicle) {
+                        $location = $locations[$vehicle->license_plate] ?? null;
+                        $hasActiveReservation = ((int) ($vehicle->active_reservations_count ?? 0)) > 0;
+                        $mongoRunning = $hasActiveReservation && (($location['active'] ?? false) === true);
+                        $effectiveStatus = $mongoRunning ? 'running' : ($hasActiveReservation ? 'occupied' : 'available');
+
+                        $result->push([
+                            'id' => $vehicle->id,
+                            'plate' => $vehicle->license_plate,
+                            'brand' => $vehicle->brand,
+                            'model' => $vehicle->model,
+                            'tenant_id' => (string) $tenant->id,
+                            'tenant_name' => $tenant->name,
+                            'latitude' => $location['latitude'] ?? null,
+                            'longitude' => $location['longitude'] ?? null,
+                            'mongo_active' => $mongoRunning,
+                            'postgres_active' => $hasActiveReservation,
+                            'status' => $effectiveStatus,
+                        ]);
+                    }
+                } catch (\Throwable) {
+                } finally {
+                    try {
+                        tenancy()->end();
+                    } catch (\Throwable) {
+                    }
+                }
+            }
+
+            return response()->json($result->values());
+        }
+
+        // Single-tenant context (tenant admin viewing their own vehicles)
         $this->authorize('viewAny', Vehicle::class);
 
         $vehicles = Vehicle::query()
@@ -271,5 +357,26 @@ class VehicleController extends Controller
         })->values();
 
         return response()->json($result);
+    }
+
+    private function resolveVehicleForRequest(Request $request, int|string|Vehicle $id): Vehicle
+    {
+        if ($id instanceof Vehicle) {
+            return $id;
+        }
+
+        if ($this->isCrossTenantSuperAdminRequest($request)) {
+            $tenant = Tenant::findOrFail((string) $request->query('tenant_id'));
+            tenancy()->initialize($tenant);
+        }
+
+        return Vehicle::findOrFail($id);
+    }
+
+    private function isCrossTenantSuperAdminRequest(Request $request): bool
+    {
+        $user = $request->user();
+
+        return $request->filled('tenant_id') && $user && $user->isSuperAdmin();
     }
 }
