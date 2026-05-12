@@ -43,7 +43,7 @@ return [
     'ia' => [
         'url'   => env('IA_API_URL', 'https://api.groq.com/openai/v1'),
         'key'   => env('IA_API_KEY'),
-        'model' => env('IA_MODEL', 'llama-3.1-8b-instant'),
+        'model' => env('IA_MODEL', 'llama-3.3-70b-versatile'),
     ],
 
     /*
