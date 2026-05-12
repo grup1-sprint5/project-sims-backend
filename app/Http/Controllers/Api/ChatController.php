@@ -77,6 +77,14 @@ class ChatController extends Controller
             );
         }
 
+        if ($response->status() === 429) {
+            Log::warning('ChatController: AI rate limit hit', ['model' => $model]);
+            return response()->json(
+                ['error' => 'L\'assistent IA ha rebut moltes peticions. Espera uns segons i torna-ho a intentar.'],
+                429
+            );
+        }
+
         if ($response->failed()) {
             Log::error('ChatController: AI API error', [
                 'status' => $response->status(),
