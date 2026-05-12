@@ -37,13 +37,13 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | IA Chat (Google Gemini - OpenAI compatible endpoint)
+    | IA Chat (Groq - OpenAI compatible endpoint)
     |--------------------------------------------------------------------------
     */
     'ia' => [
-        'url'   => env('IA_API_URL', 'https://generativelanguage.googleapis.com/v1beta/openai'),
+        'url'   => env('IA_API_URL', 'https://api.groq.com/openai/v1'),
         'key'   => env('IA_API_KEY'),
-        'model' => env('IA_MODEL', 'gemini-2.0-flash-lite'),
+        'model' => env('IA_MODEL', 'llama-3.1-8b-instant'),
     ],
 
     /*
