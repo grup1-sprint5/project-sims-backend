@@ -271,9 +271,6 @@ class VehicleController extends Controller
                 return response()->json(['message' => 'Forbidden'], 403);
             }
 
-            // Fetch all locations once in central context (no tenant filter)
-            $locations = $this->locationService->getLocations();
-
             $result = collect();
             $tenants = Tenant::where('active', true)->where('id', '!=', 'central')->get();
 
@@ -284,6 +281,9 @@ class VehicleController extends Controller
                     if (!\Illuminate\Support\Facades\Schema::hasTable('vehicles')) {
                         continue;
                     }
+
+                    // Fetch locations inside tenant context so SQL fallback reads the right schema
+                    $locations = $this->locationService->getLocations();
 
                     $tenantVehicles = Vehicle::query()
                         ->withCount([
