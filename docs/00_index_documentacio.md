@@ -22,6 +22,9 @@ Aquest paquet de documents explica el projecte des de diferents nivells: executi
 6. [`06_conceptes_abstractes_i_ia.md`](./06_conceptes_abstractes_i_ia.md)
    - Explicacions no tècniques de conceptes (inclòs “per què una IA pot tindre memòria”).
 
+7. [`07_entorn_de_testing.md`](./07_entorn_de_testing.md)
+   - Configuració de l'entorn de testing, creació de la BD de test i execució dels tests.
+
 ## Com usar aquests documents
 
 - Si has de preparar una presentació: comença per `01` i `02`.
